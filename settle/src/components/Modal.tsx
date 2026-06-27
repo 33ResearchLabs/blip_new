@@ -31,25 +31,30 @@ const VARIANT_CONFIG: Record<ModalVariant, {
   buttonShadow: string;
 }> = {
   success: {
-    // Green ✓ icon is kept so the dialog still reads as a success, but the
-    // CTA is a neutral white-on-black button (matching `warning`/`info`)
-    // rather than a green one — per the monochrome button direction.
+    // CheckCircle2 icon is kept so the dialog still reads as a success, but
+    // the icon + CTA are neutral white-on-black (flipping to black-on-white in
+    // light mode via the .user-scope overrides) rather than green — per the
+    // monochrome direction shared with warning/info/error.
     icon: CheckCircle2,
-    iconColor: 'text-emerald-400',
-    iconBg: 'bg-emerald-500/10',
-    border: 'border-emerald-500/20',
+    iconColor: 'text-white',
+    iconBg: 'bg-white/10',
+    border: 'border-white/15',
     buttonBg: 'bg-white text-black',
     buttonHover: 'hover:bg-white/90',
     buttonShadow: 'shadow-[0_2px_12px_rgba(0,0,0,0.25)]',
   },
   error: {
+    // XCircle icon is kept so the dialog still reads as a failure, but the
+    // icon + CTA are neutral white-on-black (flipping to black-on-white in
+    // light mode via the .user-scope overrides) rather than red — per the
+    // monochrome button direction shared with warning/info/success.
     icon: XCircle,
-    iconColor: 'text-red-400',
-    iconBg: 'bg-red-500/10',
-    border: 'border-red-500/20',
-    buttonBg: 'bg-gradient-to-b from-red-500 to-red-600',
-    buttonHover: 'hover:from-red-400 hover:to-red-500',
-    buttonShadow: 'shadow-[0_2px_12px_rgba(239,68,68,0.15)]',
+    iconColor: 'text-white',
+    iconBg: 'bg-white/10',
+    border: 'border-white/15',
+    buttonBg: 'bg-white text-black',
+    buttonHover: 'hover:bg-white/90',
+    buttonShadow: 'shadow-[0_2px_12px_rgba(0,0,0,0.25)]',
   },
   warning: {
     icon: AlertTriangle,
@@ -225,11 +230,11 @@ export function Modal({
                 disabled={loading}
                 className={`flex-1 px-3 py-2.5 rounded-xl ${config.buttonBg} ${
                   // Info variant uses solid primary (orange) so the label
-                  // needs to be dark for AA contrast. Warning and success now
-                  // render as white buttons, so they also need dark text.
-                  // Remaining variants keep their light-on-saturated-color combo.
+                  // needs to be dark for AA contrast. Warning, success and
+                  // error now render as white buttons, so they also need dark
+                  // text (which the .user-light override flips back to white).
                   variant === 'info' ? 'text-background'
-                    : variant === 'warning' || variant === 'success' ? 'text-black'
+                    : variant === 'warning' || variant === 'success' || variant === 'error' ? 'text-black'
                     : 'text-white'
                 } text-[12px] font-bold
                            ${config.buttonHover} transition-all disabled:opacity-50 disabled:cursor-not-allowed
