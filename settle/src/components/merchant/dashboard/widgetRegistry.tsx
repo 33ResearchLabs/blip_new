@@ -88,6 +88,8 @@ export interface DashboardContext {
   setSelectedOrderPopup: (order: Order | null) => void;
   setSelectedMempoolOrder: (order: any | null) => void;
   setSelectedOrderId: (id: string | null) => void;
+  /** Open the current OrderQuickView popup by id (fetches if not loaded). */
+  onOpenOrderById: (orderId: string) => void;
   acceptOrder: (order: Order) => void;
   acceptingOrderId: string | null;
   lockingEscrowOrderId?: string | null;
@@ -286,7 +288,7 @@ const WidgetCompleted: React.FC<{ ctx: DashboardContext }> = ({ ctx }) => (
   >
     <CompletedOrdersPanel
       orders={ctx.completedOrders}
-      onSelectOrder={(order) => ctx.setSelectedOrderId(order.id)}
+      onSelectOrder={(order) => ctx.onOpenOrderById(order.id)}
       collapsed={ctx.completedCollapsed}
       onCollapseChange={ctx.setCompletedCollapsed}
       walletBalance={ctx.effectiveBalance}
@@ -323,7 +325,7 @@ const WidgetActivity: React.FC<{ ctx: DashboardContext }> = ({ ctx }) => (
           counterpartyType: order.isM2M ? "merchant" : "user",
         })
       }
-      onSelectOrder={(orderId) => ctx.setSelectedOrderId(orderId)}
+      onSelectOrder={(orderId) => ctx.onOpenOrderById(orderId)}
       onCollapseChange={ctx.setActivityCollapsed}
     />
   </div>
@@ -334,7 +336,7 @@ const WidgetNotifications: React.FC<{ ctx: DashboardContext }> = ({ ctx }) => (
   <NotificationsPanel
     notifications={ctx.notifications}
     onMarkRead={ctx.markNotificationRead}
-    onSelectOrder={ctx.setSelectedOrderId}
+    onSelectOrder={ctx.onOpenOrderById}
     onOpenChat={(orderId) => {
       const order =
         ctx.pendingOrders.find((o) => o.id === orderId) ||
@@ -342,7 +344,7 @@ const WidgetNotifications: React.FC<{ ctx: DashboardContext }> = ({ ctx }) => (
         ctx.completedOrders.find((o) => o.id === orderId) ||
         ctx.cancelledOrders.find((o) => o.id === orderId);
       if (order) ctx.handleOpenChat(order);
-      else ctx.setSelectedOrderId(orderId);
+      else ctx.onOpenOrderById(orderId);
     }}
     onOpenPaymentMethods={ctx.onOpenPaymentMethods}
     onOpenSettings={ctx.onOpenSettings}
