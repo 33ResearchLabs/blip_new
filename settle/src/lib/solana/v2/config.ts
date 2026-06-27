@@ -161,6 +161,13 @@ export const DEVNET_WS_ENDPOINT = (() => {
 export const COMPLIANCE_WALLETS: PublicKey[] = [
   new PublicKey('5wA1UMxTdkypE4arpgckZPzA9Gv53QhUUw7dCm7tZYK2'),
   new PublicKey('AcptbLFa7CrUQFWG5BZr2iycZR2MQwprSbrrHUuAnyYM'),
+  // Dispute-officer wallets — also registered as on-chain arbiters in the escrow
+  // program (set_arbiters → ArbiterSet PDA). Keeping these in sync means a
+  // wallet-login officer can sign the on-chain escrow resolution for a dispute.
+  new PublicKey('FD4MqhLuobg1KFCXDok46PjMPWjPSL6P9wzLkwSvV9dr'),
+  new PublicKey('FxXGLxEQhdsR29B64i1BnbDkBVvLktrRyexdUt6BYA5Q'),
+  new PublicKey('GbYh4KnigcsMS2TVTawEB3K8eBXWkuvZURGiJ44urNGL'),
+  new PublicKey('GdaNzoQB2ezpn9g9rhe6wMNxaFrFMC1UFm38Uw7KC18C'),
 ];
 
 // Environment variable override for compliance wallets
