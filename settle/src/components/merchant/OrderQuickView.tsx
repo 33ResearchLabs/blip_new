@@ -3319,6 +3319,7 @@ export function OrderQuickView({
   const fullScreenTitle = (() => {
     if (!selectedOrder) return "Order";
     if (qvStatus === "completed") return "Order Completed";
+    if (qvStatus === "disputed") return "Order Disputed";
     if (isActiveOrder) {
       if (qvStatus === "accepted") return "Lock Escrow";
       if (qvStatus === "escrowed") return "Buyer Pays";
@@ -3545,6 +3546,26 @@ export function OrderQuickView({
                   />
                 ) : (
                   <>
+                    {/* Disputed status banner — a disputed order isn't active or
+                        terminal, so it lands in this generic body; surface its
+                        status clearly instead of looking like a plain order. */}
+                    {qvStatus === "disputed" && (
+                      <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3 flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
+                          <AlertTriangle className="w-4 h-4 text-amber-400" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-amber-300">
+                            Order Disputed
+                          </p>
+                          <p className="text-xs text-foreground/55 mt-0.5">
+                            This order is under review. Open the dispute to see
+                            details and respond.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Escrow Status */}
                     {selectedOrder.escrowTxHash && (
                       <div className="bg-foreground/[0.02] border border-foreground/[0.04] rounded-xl p-3">
