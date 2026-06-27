@@ -1577,16 +1577,16 @@ export const OrderDetailScreen = ({
           }
 
           return (
-            <div className={`mb-4 p-4 rounded-2xl ${AMBER_CARD}`}>
+            <div className="mb-4 p-4 rounded-2xl bg-surface-card border border-border-subtle">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-warning-dim flex-shrink-0">
-                  <AlertTriangle className="w-5 h-5 text-warning" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-raised border border-border-subtle flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-text-secondary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-warning">
+                  <p className="text-[15px] font-semibold text-text-primary">
                     Refund not yet received?
                   </p>
-                  <p className="text-[13px] text-warning mt-0.5">
+                  <p className="text-[13px] text-text-secondary mt-0.5">
                     We&apos;re still releasing your funds. Our system retries
                     automatically, but you can claim your refund now.
                   </p>
