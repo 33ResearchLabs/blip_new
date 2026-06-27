@@ -21,6 +21,7 @@ import {
   MessageCircle,
   Store,
   Hash,
+  ChevronRight,
   Link as LinkIcon,
   Zap,
   Star,
@@ -300,6 +301,136 @@ function formatDate(dateStr?: string): string {
     minute: "2-digit",
   });
 }
+
+// Relative "Just now / 5m ago" stamp for the notification popup header.
+function formatRelative(dateStr?: string): string {
+  if (!dateStr) return "Just now";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "Just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+// Notification-style popup metadata, keyed by order status. Drives the new
+// notification UI (title, ORDER_* code badge, body copy, timestamp row and the
+// optional "verified" banner). Maps onto the core trading-workflow events.
+const NOTIF_META: Record<
+  string,
+  {
+    code: string;
+    title: string;
+    details: string;
+    tone: "green" | "red" | "amber";
+    timeLabel: string;
+    timeField: keyof OrderDetails;
+    banner?: { title: string; body: string };
+  }
+> = {
+  pending: {
+    code: "ORDER_CREATED",
+    title: "New order created",
+    details:
+      "A new order has been created.\nIt is waiting to be accepted.",
+    tone: "green",
+    timeLabel: "Created Time",
+    timeField: "created_at",
+  },
+  open: {
+    code: "ORDER_CREATED",
+    title: "New order created",
+    details:
+      "A new order has been created.\nIt is waiting to be accepted.",
+    tone: "green",
+    timeLabel: "Created Time",
+    timeField: "created_at",
+  },
+  accepted: {
+    code: "ORDER_ACCEPTED",
+    title: "Order accepted",
+    details:
+      "The order has been accepted.\nEscrow will be locked next.",
+    tone: "green",
+    timeLabel: "Accepted Time",
+    timeField: "accepted_at",
+  },
+  escrowed: {
+    code: "ORDER_ESCROWED",
+    title: "Escrow locked",
+    details:
+      "Escrow has been locked.\nThe buyer can now send the payment.",
+    tone: "green",
+    timeLabel: "Escrowed Time",
+    timeField: "escrowed_at",
+    banner: {
+      title: "Funds secured",
+      body: "Crypto is locked in escrow until the trade completes.",
+    },
+  },
+  payment_sent: {
+    code: "ORDER_PAYMENT_SENT",
+    title: "Payment sent",
+    details:
+      "The buyer marked the payment as sent.\nPlease verify and confirm it.",
+    tone: "amber",
+    timeLabel: "Sent Time",
+    timeField: "payment_sent_at",
+  },
+  payment_confirmed: {
+    code: "ORDER_PAYMENT_CONFIRMED",
+    title: "Payment confirmed",
+    details:
+      "The payment has been confirmed.\nYour escrow will be released to the seller.",
+    tone: "green",
+    timeLabel: "Confirmed Time",
+    timeField: "payment_confirmed_at",
+    banner: {
+      title: "Payment verified",
+      body: "The payment has been verified and confirmed. Escrow will be released shortly.",
+    },
+  },
+  completed: {
+    code: "ORDER_COMPLETED",
+    title: "Trade completed",
+    details:
+      "The trade has been completed successfully.\nFunds have been released to the seller.",
+    tone: "green",
+    timeLabel: "Completed Time",
+    timeField: "completed_at",
+    banner: {
+      title: "Trade complete",
+      body: "Escrow has been released and this order is now closed.",
+    },
+  },
+  cancelled: {
+    code: "ORDER_CANCELLED",
+    title: "Order cancelled",
+    details: "This order has been cancelled.\nNo funds were exchanged.",
+    tone: "red",
+    timeLabel: "Cancelled Time",
+    timeField: "cancelled_at",
+  },
+  expired: {
+    code: "ORDER_EXPIRED",
+    title: "Order expired",
+    details:
+      "This order expired before it could be completed.\nNo funds were exchanged.",
+    tone: "red",
+    timeLabel: "Expired Time",
+    timeField: "expires_at",
+  },
+  disputed: {
+    code: "APPEAL_OPENED",
+    title: "Appeal opened",
+    details:
+      "An appeal has been opened for this order.\nOur team is reviewing it.",
+    tone: "amber",
+    timeLabel: "Opened Time",
+    timeField: "disputed_at",
+  },
+};
 
 // Truncate hash for display
 function truncateHash(hash: string, startChars = 6, endChars = 4): string {
@@ -667,8 +798,190 @@ export function OrderDetailsPanel({
   const sellerEntityId =
     isM2M || isBuyOrder ? order.merchant?.id : order.user?.id;
 
+  // Toggle for the legacy order-detail UI. Typed as `boolean` (not the literal
+  // `false`) so TypeScript keeps the JSX branch reachable and preserves the
+  // `order` non-null narrowing inside it — a literal `false` would mark it as
+  // dead code and reset narrowing, surfacing spurious "possibly null" errors.
+  const SHOW_LEGACY_ORDER_UI: boolean = false;
+
+  // ── Notification popup view-model (derived once; `order` is non-null here).
+  // Icons/accents are intentionally monochrome (black/white) — no per-status
+  // colour, so the notification reads consistently regardless of state.
+  const notif = NOTIF_META[order.status] || NOTIF_META.pending;
+  const notifPmType = order.locked_payment_method?.type ?? order.payment_method;
+  const payMethodLabel =
+    notifPmType === "upi"
+      ? "UPI"
+      : notifPmType === "cash"
+        ? "Cash"
+        : notifPmType === "other"
+          ? order.locked_payment_method?.label || "Other"
+          : "Bank";
+  const notifRawTime = order[notif.timeField] as string | undefined;
+  const notifStamp = formatDate(notifRawTime);
+
   return (
     <>
+    {/* ════════════════ NEW notification-style popup (ref: design image) ════════════════ */}
+        <div className="fixed inset-0 z-50" onClick={onClose}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="relative h-full flex items-center justify-center p-4">
+            <div
+              className="bg-card-solid rounded-3xl w-full max-w-sm max-h-[88vh] overflow-y-auto border border-white/10 p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header — close only */}
+              <div className="flex items-center justify-end mb-4">
+                <button
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
+                >
+                  <X className="w-5 h-5 text-white/50" />
+                </button>
+              </div>
+
+              {/* Relative time */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-2 h-2 rounded-full bg-white/40" />
+                <span className="text-[13px] font-medium text-white/55">
+                  {formatRelative(notifRawTime)}
+                </span>
+              </div>
+
+              {/* Title + ORDER_* code badge */}
+              <div className="flex items-start justify-between gap-3 mb-1.5">
+                <h2 className="text-[26px] font-bold text-white leading-tight">
+                  {notif.title}
+                </h2>
+                <span className="shrink-0 mt-1 px-3 py-1.5 rounded-full border border-white/15 text-[10px] font-bold font-mono tracking-wide text-white/55">
+                  {notif.code}
+                </span>
+              </div>
+              <p className="text-[13px] text-white/40 mb-5">{notifStamp}</p>
+
+              <div className="border-t border-white/10 mb-4" />
+
+              {/* Details copy */}
+              <p className="text-[11px] font-bold font-mono uppercase tracking-[0.18em] text-white/35 mb-2.5">
+                Details
+              </p>
+              <p className="text-[15px] text-white/75 leading-relaxed whitespace-pre-line mb-5">
+                {notif.details}
+              </p>
+
+              {/* Detail rows */}
+              <div className="rounded-2xl border border-white/10 divide-y divide-white/[0.07] mb-4">
+                {/* Order ID */}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="w-8 h-8 rounded-full border border-white/[0.12] flex items-center justify-center shrink-0">
+                    <Hash className="w-4 h-4 text-white/55" />
+                  </div>
+                  <span className="text-[14px] text-white/55">Order ID</span>
+                  <div className="ml-auto flex items-center gap-2 min-w-0">
+                    <span className="text-[14px] font-semibold text-white truncate">
+                      {order.order_number}
+                    </span>
+                    <button
+                      onClick={() => handleCopy(order.order_number, "notif-order")}
+                      aria-label="Copy order ID"
+                      className="p-1 rounded hover:bg-white/[0.08] transition-colors"
+                    >
+                      {copiedField === "notif-order" ? (
+                        <Check className="w-4 h-4 text-white" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-white/40" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+                {/* Buyer — tap to open profile */}
+                <button
+                  onClick={() =>
+                    buyerEntityId &&
+                    setProfileTarget({
+                      entityType: buyerEntityType,
+                      id: buyerEntityId,
+                    })
+                  }
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-white/[0.02] transition-colors"
+                >
+                  <div className="w-8 h-8 rounded-full border border-white/[0.12] flex items-center justify-center shrink-0">
+                    <User className="w-4 h-4 text-white/55" />
+                  </div>
+                  <span className="text-[14px] text-white/55">Buyer</span>
+                  <div className="ml-auto flex items-center gap-1.5 min-w-0">
+                    <span className="text-[14px] font-semibold text-white truncate">
+                      {buyerName}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-white/30 shrink-0" />
+                  </div>
+                </button>
+                {/* Amount */}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="w-8 h-8 rounded-full border border-white/[0.12] flex items-center justify-center shrink-0">
+                    <span className="text-[12px] font-bold text-white/55">
+                      {(order.crypto_currency || "T").slice(0, 1)}
+                    </span>
+                  </div>
+                  <span className="text-[14px] text-white/55">Amount</span>
+                  <div className="ml-auto flex items-center gap-2">
+                    <span className="text-[14px] font-semibold text-white">
+                      {Number(order.crypto_amount).toLocaleString()}{" "}
+                      {order.crypto_currency}
+                    </span>
+                    <span className="text-[12px] text-white/35">
+                      ≈ {Number(order.fiat_amount).toLocaleString()}{" "}
+                      {order.fiat_currency}
+                    </span>
+                  </div>
+                </div>
+                {/* Payment Method */}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="w-8 h-8 rounded-full border border-white/[0.12] flex items-center justify-center shrink-0">
+                    <CreditCard className="w-4 h-4 text-white/55" />
+                  </div>
+                  <span className="text-[14px] text-white/55">
+                    Payment Method
+                  </span>
+                  <span className="ml-auto text-[14px] font-semibold text-white">
+                    {payMethodLabel}
+                  </span>
+                </div>
+                {/* Timestamp */}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <div className="w-8 h-8 rounded-full border border-white/[0.12] flex items-center justify-center shrink-0">
+                    <Clock className="w-4 h-4 text-white/55" />
+                  </div>
+                  <span className="text-[14px] text-white/55">
+                    {notif.timeLabel}
+                  </span>
+                  <span className="ml-auto text-[14px] font-semibold text-white">
+                    {notifStamp}
+                  </span>
+                </div>
+              </div>
+
+              {/* Optional status banner */}
+              {notif.banner && (
+                <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3.5 mb-1">
+                  <Shield className="w-5 h-5 text-white/55 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[14px] font-semibold text-white mb-0.5">
+                      {notif.banner.title}
+                    </p>
+                    <p className="text-[13px] text-white/55 leading-snug">
+                      {notif.banner.body}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+    {/* ════════════ OLD order-detail UI — hidden, kept for reference ════════════ */}
+    {SHOW_LEGACY_ORDER_UI && (
     <div className="fixed inset-0 z-50" onClick={onClose}>
       {/* Blur backdrop */}
       <div className="absolute inset-0 backdrop-blur-sm" />
@@ -2043,6 +2356,7 @@ export function OrderDetailsPanel({
         </div>
       </div>
     </div>
+    )}
 
     {/* Counterparty profile — opened by tapping a Buyer/Seller card above. */}
     <ProfileSheet
