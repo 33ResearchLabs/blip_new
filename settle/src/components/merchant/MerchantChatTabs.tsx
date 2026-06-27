@@ -208,15 +208,15 @@ export function MerchantChatTabs({
           }} />
           <button
             onClick={() => setActiveTab("active")}
-            style={{ flex: 1, position: "relative", zIndex: 1, padding: "7px 0", fontSize: 13, fontWeight: 700, color: activeTab === "active" ? "var(--foreground)" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s" }}
+            style={{ flex: 1, position: "relative", zIndex: 1, padding: "5px 0", fontSize: 11, fontWeight: activeTab === "active" ? 600 : 500, color: activeTab === "active" ? "var(--foreground)" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s, font-weight 0.2s" }}
           >
             Inbox{inboxUnread > 0 ? ` · ${inboxUnread}` : ""}
           </button>
           <button
             onClick={() => setActiveTab("support")}
-            style={{ flex: 1, position: "relative", zIndex: 1, padding: "7px 0", fontSize: 13, fontWeight: 700, color: activeTab === "support" ? "var(--foreground)" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+            style={{ flex: 1, position: "relative", zIndex: 1, padding: "5px 0", fontSize: 11, fontWeight: activeTab === "support" ? 600 : 500, color: activeTab === "support" ? "var(--foreground)" : "var(--color-text-secondary)", background: "none", border: "none", cursor: "pointer", borderRadius: 11, transition: "color 0.2s, font-weight 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             Support
@@ -342,7 +342,7 @@ export function MerchantChatTabs({
                     {/* Row 1: username + trade badge + time */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3, gap: 6 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
-                        <span style={{ fontWeight: 800, fontSize: 15, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--foreground)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                           {displayName}
                         </span>
                         <span style={{
@@ -356,14 +356,14 @@ export function MerchantChatTabs({
                           {conv.order_type === "buy" ? "Buy" : "Sell"} {fiatSymbol}{Number(conv.fiat_amount).toLocaleString()}
                         </span>
                       </div>
-                      <span style={{ fontSize: 11.5, color: "var(--color-text-secondary)", flexShrink: 0, marginLeft: 4, fontWeight: 500 }}>
+                      <span style={{ fontSize: 11, color: "var(--color-text-secondary)", flexShrink: 0, marginLeft: 4, fontWeight: 500 }}>
                         {formatRelativeTime(timestamp)}
                       </span>
                     </div>
 
                     {/* Row 2: last message + unread pill */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                      <span style={{ fontSize: 13, color: hasUnread ? "var(--foreground)" : "var(--color-text-secondary)", fontWeight: hasUnread ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+                      <span style={{ fontSize: 12, color: hasUnread ? "var(--foreground)" : "var(--color-text-secondary)", fontWeight: hasUnread ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                         {conv.last_message
                           ? truncate(conv.last_message.content, 40)
                           : "No messages yet"}
