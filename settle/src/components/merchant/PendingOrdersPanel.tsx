@@ -23,6 +23,7 @@ import {
   Volume2,
   VolumeX,
   X,
+  MoreHorizontal,
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -1117,7 +1118,11 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
+  // Header overflow ("⋯") menu — holds the utility controls when the panel
+  // is too narrow to lay them out inline without overlapping.
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const sortDropdownRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // ─── Tab switch: All / Pending / My Orders ─────────────────────────
   const merchantId = merchantInfo?.id as string | undefined;
@@ -1197,14 +1202,20 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       ) {
         setSortDropdownOpen(false);
       }
+      if (
+        moreMenuRef.current &&
+        !moreMenuRef.current.contains(e.target as Node)
+      ) {
+        setMoreMenuOpen(false);
+      }
       setFilterDropdownOpen(false);
     };
-    if (sortDropdownOpen || filterDropdownOpen) {
+    if (sortDropdownOpen || filterDropdownOpen || moreMenuOpen) {
       document.addEventListener("mousedown", handleClickOutside);
       return () =>
         document.removeEventListener("mousedown", handleClickOutside);
     }
-  }, [sortDropdownOpen, filterDropdownOpen]);
+  }, [sortDropdownOpen, filterDropdownOpen, moreMenuOpen]);
 
   // Wrap my orders from the dedicated fetch into the same shape as UI orders
   const wrappedMyOrders = myOrders.map((dbRow: any) => {
@@ -1531,8 +1542,9 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
 
         {!collapsed && (
           <>
-            {/* Header row 2: tabs + filter/sort */}
-            <div className="flex items-center gap-1 min-w-0">
+            {/* Header row 2: tabs + filter/sort. `@container` so the utility
+                cluster can collapse into a ⋯ menu by the row's own width. */}
+            <div className="@container flex items-center gap-1 min-w-0">
               {/* Tabs */}
               <div className="inline-flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0">
                 {(["all", "pending", "mine"] as const).map((tab) => (
@@ -1556,6 +1568,9 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
 
               <div className="flex-1" />
 
+              {/* Inline utility cluster — hidden once the row is too narrow;
+                  its controls move into the ⋯ overflow menu below. */}
+              <div className="flex items-center gap-1 @max-[380px]:hidden">
               {/* Sound */}
               <button
                 onClick={() => {
@@ -1721,6 +1736,137 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
                             pendingSortBy === opt.value
                               ? "text-foreground/70 bg-foreground/[0.06]"
                               : "text-white/35 hover:text-foreground/50 hover:bg-foreground/[0.04]"
+                          }`}
+                        >
+                          {opt.label}
+                          {pendingSortBy === opt.value && (
+                            <Check className="w-2.5 h-2.5 text-foreground/50" />
+                          )}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              </div>
+
+              {/* Overflow ⋯ menu — only rendered (visible) when the inline
+                  cluster is hidden at narrow widths. Same actions, stacked. */}
+              <div
+                className="relative shrink-0 hidden @max-[380px]:block"
+                ref={moreMenuRef}
+              >
+                <button
+                  onClick={() => setMoreMenuOpen((o) => !o)}
+                  className={`inline-flex items-center justify-center w-7 h-7 rounded border transition-all ${
+                    moreMenuOpen || pendingFilter !== "all"
+                      ? "bg-white/[0.06] text-[#f5f5f7] border-white/[0.12]"
+                      : "bg-foreground/[0.02] border-foreground/[0.06] text-foreground/25 hover:bg-foreground/[0.05]"
+                  }`}
+                  title="More"
+                >
+                  <MoreHorizontal className="w-3.5 h-3.5" />
+                </button>
+                <AnimatePresence>
+                  {moreMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-1 z-50 min-w-[160px] bg-[#1a1a1a] border border-foreground/[0.08] rounded-lg shadow-xl p-1"
+                    >
+                      {/* Actions */}
+                      <button
+                        onClick={() => {
+                          const next = !soundEnabled;
+                          setSoundEnabled(next);
+                          if (next)
+                            setTimeout(() => playSound?.("notification"), 0);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[11px] text-foreground/70 hover:bg-foreground/[0.06] transition-colors"
+                      >
+                        {soundEnabled ? (
+                          <Volume2 className="w-3 h-3" />
+                        ) : (
+                          <VolumeX className="w-3 h-3" />
+                        )}
+                        {soundEnabled ? "Sound on" : "Sound off"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          fetchOrders();
+                          setMoreMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[11px] text-foreground/70 hover:bg-foreground/[0.06] transition-colors"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Refresh
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSearchVisible((v) => {
+                            if (v) setSearchQuery("");
+                            return !v;
+                          });
+                          setMoreMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[11px] text-foreground/70 hover:bg-foreground/[0.06] transition-colors"
+                      >
+                        <Search className="w-3 h-3" />
+                        Search
+                      </button>
+
+                      <div className="h-px bg-foreground/[0.06] my-1" />
+                      {/* Filter */}
+                      <div className="px-2.5 py-1 text-[9px] uppercase tracking-wider text-foreground/30 font-mono">
+                        Filter
+                      </div>
+                      {(
+                        [
+                          { key: "all", label: "All" },
+                          { key: "mineable", label: "Mineable" },
+                          { key: "premium", label: "High Premium" },
+                          { key: "large", label: "Large" },
+                          { key: "expiring", label: "Expiring" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.key}
+                          onClick={() => setPendingFilter(opt.key)}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] transition-colors ${
+                            pendingFilter === opt.key
+                              ? "bg-white/[0.06] text-[#f5f5f7]"
+                              : "text-foreground/60 hover:bg-foreground/[0.04]"
+                          }`}
+                        >
+                          {opt.label}
+                          {pendingFilter === opt.key && (
+                            <Check className="w-2.5 h-2.5 text-foreground/50" />
+                          )}
+                        </button>
+                      ))}
+
+                      <div className="h-px bg-foreground/[0.06] my-1" />
+                      {/* Sort */}
+                      <div className="px-2.5 py-1 text-[9px] uppercase tracking-wider text-foreground/30 font-mono">
+                        Sort
+                      </div>
+                      {(
+                        [
+                          { value: "time", label: "Time" },
+                          { value: "premium", label: "Premium" },
+                          { value: "amount", label: "Size" },
+                          { value: "rating", label: "Rating" },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => setPendingSortBy(opt.value)}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded text-[11px] transition-colors ${
+                            pendingSortBy === opt.value
+                              ? "bg-white/[0.06] text-[#f5f5f7]"
+                              : "text-foreground/60 hover:bg-foreground/[0.04]"
                           }`}
                         >
                           {opt.label}

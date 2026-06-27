@@ -23,6 +23,8 @@ import {
   MOCK_MODE,
 } from 'settlement-core';
 
+import { closeActiveAppealForTerminalOrder } from '../appeals/closeAppeal';
+
 // Fire-and-forget helper — logs errors but never blocks
 const bgQuery = (sql: string, params: unknown[]) => dbQuery(sql, params).catch(() => {});
 
@@ -270,6 +272,21 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         const order = await queryOne<OrderRow>('SELECT * FROM orders WHERE id = $1', [id]);
         if (!order) {
           return reply.status(404).send({ success: false, error: 'Order not found' });
+        }
+        // Defense-in-depth: post-acceptance cancellation must be MUTUAL (appeal
+        // agree/reject), not a unilateral PATCH by a participant. Block once a
+        // counterparty is engaged (accepted_at set). 'system' (workers + the
+        // mutual-cancel/appeal finalize, which write the order directly) is
+        // exempt; pre-acceptance + unclaimed sell-offer withdrawals have
+        // accepted_at NULL and still cancel here. Primary enforcement is in
+        // settle handleOrderAction; this closes the direct-core-api path.
+        const acceptedAt = (order as { accepted_at?: string | Date | null }).accepted_at;
+        if (actor_type !== 'system' && acceptedAt) {
+          return reply.status(409).send({
+            success: false,
+            error: 'This order has been accepted. Use mutual cancellation (the counterparty must agree) or an appeal.',
+            code: 'MUST_USE_MUTUAL_CANCEL',
+          });
         }
         if (order.escrow_tx_hash) {
           // The caller MUST have signed + submitted the on-chain
@@ -787,6 +804,13 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        // Close any active appeal if this transition terminates the order (e.g. a
+        // manual cancel, or a MOCK-mode completion that didn't go through the
+        // appeal endpoint). Atomic with the status write; no-op if no appeal.
+        if (['completed', 'cancelled', 'expired'].includes(String(updatedOrder.status))) {
+          await closeActiveAppealForTerminalOrder(client, id, String(updatedOrder.status));
+        }
+
         // Outbox event inside transaction — atomic with order update
         const statusToEvent: Record<string, OrderEventPayload['event']> = {
           escrowed: ORDER_EVENT.ESCROWED, payment_sent: ORDER_EVENT.PAYMENT_SENT,
@@ -937,6 +961,22 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (!order) {
           return { statusCode: 404, body: { success: false, error: 'Order not found' } };
+        }
+
+        // Defense-in-depth (see PATCH cancel): post-acceptance cancellation must
+        // be mutual. Block a participant's unilateral DELETE once a counterparty
+        // is engaged (accepted_at set); 'system' and pre-acceptance/unclaimed
+        // (accepted_at NULL) still cancel here.
+        const acceptedAt = (order as { accepted_at?: string | Date | null }).accepted_at;
+        if (actor_type !== 'system' && acceptedAt) {
+          return {
+            statusCode: 409,
+            body: {
+              success: false,
+              error: 'This order has been accepted. Use mutual cancellation (the counterparty must agree) or an appeal.',
+              code: 'MUST_USE_MUTUAL_CANCEL',
+            },
+          };
         }
 
         if (order.escrow_tx_hash) {
@@ -1164,6 +1204,19 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
             txHash: tx_hash, metadata: { tx_hash },
           });
           syncReceiptTransition(id, 'COMPLETED', { txHash: tx_hash });
+
+          // If the seller resolved an open appeal by releasing, close it so the
+          // timeout worker doesn't try to escalate a now-completed order. Pooled
+          // (this endpoint isn't a single multi-statement txn); best-effort.
+          try {
+            await closeActiveAppealForTerminalOrder(
+              { query: async (t, p) => ({ rows: await dbQuery(t, p) }) },
+              id,
+              'completed',
+            );
+          } catch (appealCloseErr) {
+            logger.error('[Appeal] Failed to auto-close appeal after release', { orderId: id, error: appealCloseErr });
+          }
           const __relT3 = Date.now();
 
           const __relBreakdown = {

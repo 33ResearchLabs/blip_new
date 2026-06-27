@@ -25,7 +25,7 @@ interface UseTradeCreationParams {
   setShowOpenTradeModal: (show: boolean) => void;
   setIsCreatingTrade: (creating: boolean) => void;
   setCreateTradeError: (error: string | null) => void;
-  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string, opts?: { sticky?: boolean; priority?: 'high' | 'normal'; status?: string }) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   refreshBalance: () => void;
 }
@@ -170,7 +170,7 @@ export function useTradeCreation({
           const newOrder = mapDbOrderToUI(data.data, merchantId, merchantName);
           setOrders((prev: Order[]) => [newOrder, ...prev.filter((o: Order) => o.id !== newOrder.id)]);
           playSound('trade_complete');
-          addNotification('escrow', `Sell order created! ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDT locked in escrow`, data.data?.id);
+          addNotification('escrow', `Sell order created! ${parseFloat(openTradeForm.cryptoAmount).toLocaleString()} USDT locked in escrow`, data.data?.id, { status: 'escrowed' });
         }
         refreshBalance();
         setShowOpenTradeModal(false);

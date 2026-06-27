@@ -10,8 +10,8 @@
  * "Payment verified!" banner → You→Escrow→Buyer route (all done) → totals tiles
  * → itemised receipt → thank-you → Order Overview → Need help.
  *
- * Pure presentation. Colours are 100% theme tokens (success / accent / error /
- * surface) — no hardcoded hex, no `text-white`, including buttons.
+ * Pure presentation. Colours are 100% theme tokens (neutral border/text/accent
+ * /error / surface) — no hardcoded hex, no `text-white`, including buttons.
  */
 
 import { useState } from "react";
@@ -100,8 +100,8 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
             animate={{ y: 0, opacity: 1 }}
             className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
           >
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-success/15">
-              <ShieldCheck className="w-6 h-6 text-success" />
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
+              <ShieldCheck className="w-6 h-6 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">Payment verified!</p>
@@ -109,9 +109,9 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
                 The payment has been verified and the USDT has been released to the buyer.
               </p>
             </div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/15 shrink-0 self-start">
-              <span className="w-1.5 h-1.5 rounded-full bg-success" />
-              <span className="text-[11px] font-semibold text-success">COMPLETED</span>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-border-subtle shrink-0 self-start">
+              <span className="w-1.5 h-1.5 rounded-full bg-text-secondary" />
+              <span className="text-[11px] font-semibold text-text-secondary">COMPLETED</span>
             </div>
           </motion.div>
 
@@ -129,13 +129,13 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
                   <div key={n.label} className={`flex flex-col items-center ${isLast ? "" : "flex-1"}`}>
                     <div className="flex items-center w-full">
                       <div className="relative shrink-0 mx-auto">
-                        <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-success/15">
-                          <n.icon className="w-5 h-5 text-success" />
+                        <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-border-subtle">
+                          <n.icon className="w-5 h-5 text-text-secondary" />
                         </div>
-                        <CheckCircle2 className="absolute -top-1 -right-1 w-4 h-4 text-success bg-surface-card rounded-full" />
+                        <CheckCircle2 className="absolute -top-1 -right-1 w-4 h-4 text-text-primary bg-surface-card rounded-full" />
                       </div>
                       {!isLast && (
-                        <div className="flex-1 mx-1 border-t-2 border-dashed border-success/40" />
+                        <div className="flex-1 mx-1 border-t-2 border-dashed border-border-medium" />
                       )}
                     </div>
                     <span className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary mt-1.5">
@@ -147,7 +147,7 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
             </div>
             <div className="mt-3 pt-3 border-t border-border-subtle flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+                <span className="w-1.5 h-1.5 rounded-full bg-text-secondary shrink-0" />
                 <span className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary truncate">
                   {networkLabel()}
                 </span>
@@ -167,9 +167,9 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
             transition={{ delay: 0.06 }}
             className="grid grid-cols-3 gap-2"
           >
-            <CompletedTile icon={<ArrowUpRight className="w-4 h-4 text-success" />} label="You sold" value={cryptoStr} sub="USDT" />
-            <CompletedTile icon={<Wallet className="w-4 h-4 text-success" />} label="You received" value={fiatStr} sub={fiatCode} valueClass="text-success" />
-            <CompletedTile icon={<Landmark className="w-4 h-4 text-success" />} label="Method" value={methodLabel} />
+            <CompletedTile icon={<ArrowUpRight className="w-4 h-4 text-text-secondary" />} label="You sold" value={cryptoStr} sub="USDT" />
+            <CompletedTile icon={<Wallet className="w-4 h-4 text-text-secondary" />} label="You received" value={fiatStr} sub={fiatCode} valueClass="text-text-primary" />
+            <CompletedTile icon={<Landmark className="w-4 h-4 text-text-secondary" />} label="Method" value={methodLabel} />
           </motion.div>
 
           {/* Itemised receipt */}
@@ -180,8 +180,8 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
             className={`rounded-2xl ${CARD}`}
           >
             <div className="flex items-center gap-3 px-4 pt-4 pb-1">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-success/15">
-                <PartyPopper className="w-5 h-5 text-success" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-border-subtle">
+                <PartyPopper className="w-5 h-5 text-text-secondary" />
               </div>
               <div className="min-w-0">
                 <p className="text-[15px] font-semibold text-text-primary">Order completed</p>
@@ -192,7 +192,7 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
             </div>
             <div className="divide-y divide-border-subtle px-4 mt-1">
               <Row label="Amount sold" value={`${cryptoStr} USDT`} />
-              <Row label="Amount received" value={fiatStr} valueClass="text-success" />
+              <Row label="Amount received" value={fiatStr} valueClass="text-text-primary" />
               <Row label="Payment method" value={methodLabel} />
               <Row label="Completed on" value={completedStr} />
               <Row label="Order ID" value={displayId} />
@@ -200,8 +200,8 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
           </motion.div>
 
           {/* Thank you */}
-          <div className="rounded-2xl p-4 flex gap-3 bg-success-dim border border-success-border">
-            <PartyPopper className="w-5 h-5 text-success shrink-0 mt-0.5" />
+          <div className="rounded-2xl p-4 flex gap-3 bg-surface-active border border-border-subtle">
+            <PartyPopper className="w-5 h-5 text-text-secondary shrink-0 mt-0.5" />
             <div className="min-w-0">
               <p className="text-[14px] font-semibold text-text-primary mb-0.5">Thank you!</p>
               <p className="text-[13px] text-text-secondary leading-snug">
@@ -289,7 +289,7 @@ function CompletedTile({
   return (
     <div className={`rounded-xl p-2.5 text-center ${CARD}`}>
       <div className="flex items-center justify-center mb-1">
-        <span className="w-7 h-7 rounded-full bg-success/15 flex items-center justify-center">{icon}</span>
+        <span className="w-7 h-7 rounded-full bg-border-subtle flex items-center justify-center">{icon}</span>
       </div>
       <p className="text-[10px] uppercase tracking-wide text-text-tertiary mb-0.5">{label}</p>
       <p className={`text-[13px] font-semibold leading-tight truncate ${valueClass || "text-text-primary"}`}>{value}</p>

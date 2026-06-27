@@ -134,7 +134,9 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
   const viewerIsSeller = (viewerRole ?? (orderType === 'sell' ? 'buyer' : 'seller')) === 'seller';
   const TypeIcon = viewerIsSeller ? ArrowUpRight : ArrowDownLeft;
   const typeLabel = viewerIsSeller ? 'SELL' : 'BUY';
-  const typeColor = viewerIsSeller ? 'text-orange-400 bg-orange-500/15 border-orange-500/20' : 'text-[#f5f5f7] bg-white/[0.06] border-white/[0.09]';
+  // Neutral, direction-agnostic chip: white text on black (the SELL/BUY word
+  // still distinguishes direction; the colour no longer encodes it).
+  const typeColor = 'text-white bg-black border-white/[0.15]';
 
   // Counterparty presence for the header. In U2M the counterparty is the
   // user; in M2M it's the other merchant — so match "anyone online who isn't
@@ -194,8 +196,10 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
             messages={chatWindow.messages}
             currentUserType="merchant"
             currentUserId={merchantId}
+            viewerRole={viewerRole}
             userName={userName}
             userAvatarUrl={userAvatarUrl}
+            counterpartyNameClass="text-white bg-black"
             orderLabel={orderLabel ?? undefined}
             onSendMessage={(text, imageUrl, fileData) => {
               sendMessage(chatWindow.id, text, imageUrl, fileData);

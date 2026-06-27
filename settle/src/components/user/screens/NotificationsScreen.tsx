@@ -23,37 +23,31 @@ interface Notification {
   message: string;
   timestamp: number;
   read: boolean;
+  orderId?: string;
 }
 
-// Icons use the semantic tokens (success / warning / error / info) plus the
-// neutral text-text-secondary for "message" — no off-palette hexes.
+// Monochrome icons — distinct shapes per type, but a single neutral colour
+// (no green / yellow / blue). text-text-secondary reads correctly in both
+// light and dark; the "default" stays one step fainter.
 function getNotifIcon(type: string) {
   switch (type) {
-    case 'order':    return <Zap          size={16} className="text-warning" />;
-    case 'escrow':   return <Lock         size={16} className="text-info" />;
-    case 'payment':  return <DollarSign   size={16} className="text-success" />;
-    case 'dispute':  return <AlertTriangle size={16} className="text-error" />;
-    case 'complete': return <CheckCircle2 size={16} className="text-success" />;
+    case 'order':    return <Zap          size={16} className="text-text-secondary" />;
+    case 'escrow':   return <Lock         size={16} className="text-text-secondary" />;
+    case 'payment':  return <DollarSign   size={16} className="text-text-secondary" />;
+    case 'dispute':  return <AlertTriangle size={16} className="text-text-secondary" />;
+    case 'complete': return <CheckCircle2 size={16} className="text-text-secondary" />;
     case 'message':  return <MessageCircle size={16} className="text-text-secondary" />;
-    case 'warning':  return <AlertTriangle size={16} className="text-warning" />;
-    case 'action':   return <Shield       size={16} className="text-warning" />;
+    case 'warning':  return <AlertTriangle size={16} className="text-text-secondary" />;
+    case 'action':   return <Shield       size={16} className="text-text-secondary" />;
     default:         return <Bell         size={16} className="text-text-tertiary" />;
   }
 }
 
-// Tinted card background per type, all from the semantic palette.
-function getNotifBgClass(type: string) {
-  switch (type) {
-    case 'order':
-    case 'warning':
-    case 'action':   return 'bg-warning-dim';
-    case 'escrow':   return 'bg-surface-card'; // info-dim not in palette → neutral
-    case 'payment':
-    case 'complete': return 'bg-success-dim';
-    case 'dispute':  return 'bg-error-dim';
-    case 'message':
-    default:         return 'bg-surface-card';
-  }
+// Neutral unread-card background for every type — no coloured tints. The
+// unread state reads as a subtly raised surface (vs the plain surface-card
+// used for read cards), reinforced by the bold title and the accent dot.
+function getNotifBgClass(_type: string) {
+  return 'bg-surface-hover';
 }
 
 function formatTimeAgo(ts: number): string {
@@ -74,6 +68,8 @@ export interface NotificationsScreenProps {
   notifications: Notification[];
   onMarkRead: (id: string) => void;
   onMarkAllRead: () => void;
+  /** Opens the order detail screen for a notification tied to an order. */
+  onOpenOrder?: (orderId: string) => void;
   unreadCount: number;
   maxW: string;
   hideBottomNav?: boolean;
@@ -87,6 +83,7 @@ export const NotificationsScreen = ({
   notifications,
   onMarkRead,
   onMarkAllRead,
+  onOpenOrder,
   unreadCount,
   maxW,
   hideBottomNav = false,
@@ -184,7 +181,7 @@ export const NotificationsScreen = ({
                   <div className="flex items-center justify-between mb-0.5">
                     <p className="text-[14px] font-bold tracking-[-0.01em] text-text-primary">Trade reputation</p>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                      <div className="w-2 h-2 rounded-full bg-info" />
+                      <div className="w-2 h-2 rounded-full bg-accent" />
                     </div>
                   </div>
                   <p className="text-[13px] font-normal text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
@@ -200,7 +197,10 @@ export const NotificationsScreen = ({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => onMarkRead(notif.id)}
+                onClick={() => {
+                  if (!notif.read) onMarkRead(notif.id);
+                  if (notif.orderId) onOpenOrder?.(notif.orderId);
+                }}
                 className={`w-full rounded-[18px] p-3.5 flex items-start gap-3 text-left border ${
                   notif.read
                     ? 'bg-surface-card border-border-subtle'
@@ -208,7 +208,7 @@ export const NotificationsScreen = ({
                 }`}
               >
                 {/* Icon */}
-                <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 bg-surface-hover">
+                <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 bg-surface-card border border-border-subtle">
                   {getNotifIcon(notif.type)}
                 </div>
                 {/* Content */}
@@ -219,7 +219,7 @@ export const NotificationsScreen = ({
                     </p>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
                       {!notif.read && (
-                        <div className="w-2 h-2 rounded-full bg-info" />
+                        <div className="w-2 h-2 rounded-full bg-accent" />
                       )}
                       <p className="text-[10px] font-medium text-text-tertiary">
                         {formatTimeAgo(notif.timestamp)}

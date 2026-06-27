@@ -397,7 +397,7 @@ export function SupportTicketScreen({
                   whileTap={{ scale: 0.97 }}
                   onClick={handleSubmit}
                   disabled={!canSubmit}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-[16px] bg-accent text-white font-bold text-[14px] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+                  className="w-full flex items-center justify-center gap-2 py-3.5 rounded-[16px] bg-accent text-accent-text font-bold text-[14px] disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
                 >
                   {submitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -451,7 +451,7 @@ export function SupportTicketScreen({
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={() => setScreen("home")}
-                    className="w-full py-3.5 rounded-[16px] bg-accent text-white text-[14px] font-bold"
+                    className="w-full py-3.5 rounded-[16px] bg-accent text-accent-text text-[14px] font-bold"
                   >
                     Back to Home
                   </motion.button>

@@ -18,8 +18,8 @@
  * (bg-surface-card / text-text-* / bg-accent / bg-success …) — no hardcoded hex.
  */
 
-import { useState, type ReactNode, type ComponentType } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, type ReactNode, type ComponentType } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
@@ -97,8 +97,24 @@ export interface WaitingTrackerProps {
 
   /** Status banner — caller computes copy/icon/tone from the order status. */
   banner: TrackerBanner;
-  /** Inline match/expiry countdown shown top-right of the banner. Null hides. */
-  countdown?: { remainingSec: number; totalSec: number } | null;
+  /** Inline match/expiry countdown shown top-right of the banner. Null hides.
+   *  `caption` renders an honest one-liner under the search block (e.g.
+   *  "Auto-refund if no one accepts"). `tone` overrides the urgency colour —
+   *  omit it to keep the legacy "red under 60s" behaviour (used by the payment
+   *  deadline in OrderTrackingView); pass "neutral" for waiting-for-merchant,
+   *  where the user can't act and red only adds anxiety. */
+  countdown?: {
+    remainingSec: number;
+    totalSec: number;
+    caption?: string;
+    tone?: "neutral" | "urgent";
+  } | null;
+
+  /** Opt-in "actively searching for a merchant" treatment: a sonar pulse on the
+   *  banner icon + a rotating, factual reassurance line. Only MatchingScreen
+   *  passes this today; every other WaitingTracker consumer renders exactly as
+   *  before when it's omitted. */
+  searchHint?: { lines?: string[] } | null;
 
   /** Escrow-locked card. Null hides it (e.g. a buy order where nothing is locked). */
   escrow?: { sub: string; txHref?: string | null } | null;
@@ -109,7 +125,8 @@ export interface WaitingTrackerProps {
   createdTime?: string;
   /** Sub-line under the "Order progress" header (defaults to the active step). */
   progressSubtitle?: string;
-  /** Whether the timeline starts expanded (the post-escrow design shows it open). */
+  /** Whether the timeline starts expanded. Defaults to open — the full
+   *  step list is shown; tap the header to collapse it. */
   defaultTimelineOpen?: boolean;
 
   tiles: TrackerTile[];
@@ -130,6 +147,7 @@ export function WaitingTracker({
   onOpenSupport,
   banner,
   countdown,
+  searchHint,
   escrow,
   activeStepIndex,
   createdTime,
@@ -144,9 +162,27 @@ export function WaitingTracker({
 }: WaitingTrackerProps) {
   const [showTimeline, setShowTimeline] = useState(defaultTimelineOpen);
   const tone = TONE_CLASSES[banner.tone];
+  const reduceMotion = useReducedMotion();
 
   const remainingSec = countdown?.remainingSec ?? 0;
-  const isUrgent = !!countdown && remainingSec < 60;
+  // Honour an explicit tone; otherwise fall back to the legacy "red under 60s"
+  // so OrderTrackingView's payment deadline is unchanged.
+  const isUrgent =
+    !!countdown &&
+    (countdown.tone ? countdown.tone === "urgent" : remainingSec < 60);
+
+  // "Actively searching" treatment is fully opt-in via searchHint.
+  const searching = !!searchHint;
+  const hintLines = searchHint?.lines ?? [];
+  const [hintIdx, setHintIdx] = useState(0);
+  useEffect(() => {
+    if (!searching || hintLines.length < 2 || reduceMotion) return;
+    const id = setInterval(
+      () => setHintIdx((i) => (i + 1) % hintLines.length),
+      2800,
+    );
+    return () => clearInterval(id);
+  }, [searching, hintLines.length, reduceMotion]);
 
   const activeLabel =
     activeStepIndex >= 0 && activeStepIndex < TIMELINE.length
@@ -195,6 +231,14 @@ export function WaitingTracker({
                   transition={{ duration: 2, repeat: Infinity }}
                 />
               )}
+              {/* Sonar sweep — the "actively searching" cue (opt-in, reduced-motion safe). */}
+              {searching && banner.live && !reduceMotion && (
+                <motion.div
+                  className={`absolute inset-0 rounded-2xl border-2 ${tone.text}`}
+                  animate={{ scale: [1, 1.6], opacity: [0.35, 0] }}
+                  transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
+                />
+              )}
               <banner.icon className={`w-6 h-6 ${tone.text} ${banner.spin ? "animate-spin" : ""}`} />
             </div>
             <div className="flex-1 min-w-0">
@@ -226,6 +270,32 @@ export function WaitingTracker({
               </div>
             )}
           </motion.div>
+
+          {/* Search reassurance — honest, factual lines under the banner. The
+              caption states what happens at zero; the rotating line confirms the
+              system is actively working (no fabricated progress). Opt-in. */}
+          {searching && (countdown?.caption || hintLines.length > 0) && (
+            <div className="px-1 -mt-1.5 space-y-0.5">
+              {countdown?.caption && (
+                <p className="text-[12px] text-text-tertiary leading-snug">{countdown.caption}</p>
+              )}
+              {hintLines.length > 0 && (
+                <AnimatePresence mode="wait">
+                  <motion.p
+                    key={hintIdx}
+                    initial={reduceMotion ? false : { opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={reduceMotion ? undefined : { opacity: 0 }}
+                    transition={{ duration: 0.4 }}
+                    aria-live="polite"
+                    className="text-[12px] text-text-tertiary leading-snug"
+                  >
+                    {hintLines[hintIdx % hintLines.length]}
+                  </motion.p>
+                </AnimatePresence>
+              )}
+            </div>
+          )}
 
           {/* Escrow-locked card — accent tone, SECURED pill. */}
           {escrow && (
@@ -305,7 +375,7 @@ export function WaitingTracker({
                             {!isLast && (
                               <div
                                 className={`w-0.5 flex-1 min-h-[18px] ${
-                                  state === "done" ? "bg-warning" : "bg-border-medium"
+                                  state === "done" ? "bg-accent" : "bg-border-medium"
                                 }`}
                               />
                             )}
@@ -327,7 +397,7 @@ export function WaitingTracker({
                               <span className="text-[13px] text-text-tertiary shrink-0">{createdTime}</span>
                             )}
                             {state === "active" && i !== 0 && (
-                              <span className="text-[13px] font-medium text-warning shrink-0">In progress</span>
+                              <span className="text-[13px] font-medium text-text-secondary shrink-0">In progress</span>
                             )}
                           </div>
                         </div>
@@ -379,7 +449,9 @@ export function WaitingTracker({
               whileTap={{ scale: 0.98 }}
               onClick={onCancel}
               disabled={isCancelling}
-              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-foreground/[0.05] text-foreground/70 border border-foreground/[0.08] disabled:opacity-50 flex items-center justify-center gap-2"
+              // Solid accent pill (theme flip: black in light, white in dark).
+              // The actual confirm + consequences live in CancelOrderSheet.
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
               {cancelLabel}
@@ -396,7 +468,7 @@ export function WaitingTracker({
 function StepDot({ state }: { state: StepState }) {
   if (state === "done") {
     return (
-      <div className="w-6 h-6 rounded-full bg-warning flex items-center justify-center shrink-0">
+      <div className="w-6 h-6 rounded-full bg-accent flex items-center justify-center shrink-0">
         <Check className="w-3.5 h-3.5 text-accent-text" strokeWidth={3} />
       </div>
     );
@@ -404,7 +476,7 @@ function StepDot({ state }: { state: StepState }) {
   if (state === "active") {
     return (
       <motion.div
-        className="w-6 h-6 rounded-full bg-warning shrink-0"
+        className="w-6 h-6 rounded-full bg-accent shrink-0"
         animate={{ scale: [1, 1.15, 1], opacity: [1, 0.8, 1] }}
         transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
       />

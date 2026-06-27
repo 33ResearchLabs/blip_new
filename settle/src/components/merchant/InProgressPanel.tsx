@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useRef, useMemo } from "react";
+import { memo, useRef, useMemo, useState } from "react";
 import {
   Shield,
   Zap,
@@ -679,15 +679,33 @@ export const InProgressPanel = memo(function InProgressPanel({
   acceptingOrderId,
   cancellingOrderId,
 }: InProgressPanelProps) {
+  // Status filter pills. "all" shows every active trade; the other values
+  // narrow to a single active sub-status. Disputed (and other terminal
+  // states) are never an option here — they're filtered out upstream.
+  const [statusFilter, setStatusFilter] = useState<"all" | MinimalStatus>(
+    "all",
+  );
+
   // Only genuinely active trades belong in this panel. Anything terminal
   // (disputed/cancelled/expired/completed) is dropped so the panel shows
-  // active trades and nothing else. No status filtering UI.
-  const filteredOrders = useMemo(
+  // active trades and nothing else.
+  const activeOrders = useMemo(
     () =>
       orders.filter((order) =>
         ACTIVE_STATUSES.includes(getAuthoritativeStatus(order)),
       ),
     [orders],
+  );
+
+  // Apply the selected status pill on top of the active-only set.
+  const filteredOrders = useMemo(
+    () =>
+      statusFilter === "all"
+        ? activeOrders
+        : activeOrders.filter(
+            (order) => getAuthoritativeStatus(order) === statusFilter,
+          ),
+    [activeOrders, statusFilter],
   );
 
   const formatTimeRemaining = (seconds: number): string => {
@@ -739,6 +757,34 @@ export const InProgressPanel = memo(function InProgressPanel({
             {filteredOrders.length}
           </span>
         </div>
+
+        {/* Status filter tabs — matches the New Orders panel's All/Pending/Mine
+            tab style. Disputed is intentionally absent (never an active trade). */}
+        {!collapsed && (
+          <div
+            className="inline-flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {[
+              { key: "all", label: "All" },
+              { key: "accepted", label: "Accepted" },
+              { key: "escrowed", label: "Escrowed" },
+              { key: "payment_sent", label: "Paid" },
+            ].map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setStatusFilter(key as "all" | MinimalStatus)}
+                className={`h-full px-3 inline-flex items-center rounded-md text-[11px] font-bold transition-all shrink-0 ${
+                  statusFilter === key
+                    ? "bg-white/[0.08] text-white/90 border border-white/[0.12]"
+                    : "text-foreground/35 hover:text-foreground/60 border border-transparent"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Orders List — Virtualized */}

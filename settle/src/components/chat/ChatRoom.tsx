@@ -41,13 +41,17 @@ import {
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { ReceiptCard } from "@/components/chat/cards/ReceiptCard";
-import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
+import {
+  ImageMessageBubble,
+  type ImageUploadStatus,
+} from "@/components/chat/ImageMessageBubble";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { compressImage } from "@/lib/utils/compressImage";
 import type { ChatMessage, PresenceMember } from "@/hooks/useRealtimeChat";
 import { usePusherOptional } from "@/context/PusherContext";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
 import { getOrderChannel } from "@/lib/pusher/channels";
+import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
 
 // ============================================
 // Types
@@ -98,6 +102,13 @@ interface ChatRoomProps {
   orderLabel?: string;
   // Real avatar URL for the counterparty (user/buyer)
   userAvatarUrl?: string | null;
+  // Optional override for the trading counterparty's name styling. When set
+  // (e.g. merchant desktop passes "text-white bg-black"), the buyer/seller name
+  // renders neutral instead of its role colour. Compliance/system keep theirs.
+  counterpartyNameClass?: string;
+  // The viewer's trade role (buyer/seller) — used to personalize appeal system
+  // messages ("You raised an appeal" instead of "The seller raised an appeal").
+  viewerRole?: "buyer" | "seller" | null;
 }
 
 // ============================================
@@ -176,7 +187,6 @@ function getRoleName(senderType?: string): string {
 // ============================================
 // Sub-components
 // ============================================
-
 
 function SenderAvatar({
   senderType,
@@ -409,6 +419,8 @@ export function ChatRoom({
   chatReason = null,
   orderLabel,
   userAvatarUrl,
+  counterpartyNameClass,
+  viewerRole,
 }: ChatRoomProps) {
   const [messageText, setMessageText] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -419,7 +431,9 @@ export function ChatRoom({
   // a refresh when the order's status changes. Falls through to the JSONB
   // payload's data.status if no live event has been received yet.
   const pusher = usePusherOptional();
-  const [liveReceiptStatus, setLiveReceiptStatus] = useState<string | null>(null);
+  const [liveReceiptStatus, setLiveReceiptStatus] = useState<string | null>(
+    null,
+  );
   useEffect(() => {
     if (!pusher || !orderId) return;
     const channelName = getOrderChannel(orderId);
@@ -433,15 +447,19 @@ export function ChatRoom({
     return () => {
       try {
         channel.unbind(CHAT_EVENTS.RECEIPT_UPDATED, handler);
-      } catch { /* channel may already be torn down */ }
+      } catch {
+        /* channel may already be torn down */
+      }
       pusher.unsubscribe(channelName);
     };
   }, [pusher, orderId]);
+
   const [pendingFile, setPendingFile] = useState<{
     file: File;
     previewUrl?: string;
     category: "image" | "document";
   } | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -459,7 +477,11 @@ export function ChatRoom({
     abortController: AbortController | null;
     createdAt: number;
   }
-  const [pendingUploads, setPendingUploads] = useState<Map<string, PendingUpload>>(new Map());
+
+  const [pendingUploads, setPendingUploads] = useState<
+    Map<string, PendingUpload>
+  >(new Map());
+
   const pendingUploadsRef = useRef(pendingUploads);
   pendingUploadsRef.current = pendingUploads;
 
@@ -652,136 +674,177 @@ export function ChatRoom({
    *  3. On success: send real message, remove pending
    *  4. On failure: show retry
    */
-  const startImageUpload = useCallback(async (
-    file: File, localUrl: string, caption: string, tempId: string,
-  ) => {
-    const abortController = new AbortController();
-    const uploadTimeout = setTimeout(() => abortController.abort(), 30_000);
+  const startImageUpload = useCallback(
+    async (file: File, localUrl: string, caption: string, tempId: string) => {
+      const abortController = new AbortController();
+      const uploadTimeout = setTimeout(() => abortController.abort(), 30_000);
 
-    setPendingUploads(prev => {
-      const next = new Map(prev);
-      const existing = prev.get(tempId);
-      next.set(tempId, {
-        tempId, localUrl, caption, file,
-        status: 'uploading', progress: 0,
-        abortController,
-        createdAt: existing?.createdAt ?? Date.now(),
-      });
-      return next;
-    });
-
-    // Auto-scroll
-    requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    });
-
-    try {
-      const sigRes = await fetchWithAuth("/api/upload/signature", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId }),
-        signal: abortController.signal,
-      });
-      if (!sigRes.ok) throw new Error("Signature failed");
-      const sigData = await sigRes.json();
-      if (!sigData.success) throw new Error("Invalid signature");
-      const sig = sigData.data;
-
-      if (!sig.signature || !sig.timestamp || !sig.apiKey || !sig.cloudName || !sig.folder) {
-        throw new Error("Incomplete upload credentials");
-      }
-
-      setPendingUploads(prev => {
+      setPendingUploads((prev) => {
         const next = new Map(prev);
-        const entry = next.get(tempId);
-        if (entry) next.set(tempId, { ...entry, progress: 20 });
+        const existing = prev.get(tempId);
+        next.set(tempId, {
+          tempId,
+          localUrl,
+          caption,
+          file,
+          status: "uploading",
+          progress: 0,
+          abortController,
+          createdAt: existing?.createdAt ?? Date.now(),
+        });
         return next;
       });
 
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("signature", sig.signature);
-      formData.append("timestamp", sig.timestamp.toString());
-      formData.append("api_key", sig.apiKey);
-      formData.append("folder", sig.folder);
-
-      const imageUrl = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`);
-
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const pct = 20 + Math.round((e.loaded / e.total) * 70);
-            setPendingUploads(prev => {
-              const next = new Map(prev);
-              const entry = next.get(tempId);
-              if (entry) next.set(tempId, { ...entry, progress: pct });
-              return next;
-            });
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(JSON.parse(xhr.responseText).secure_url);
-          } else {
-            reject(new Error(`Upload failed: ${xhr.status}`));
-          }
-        };
-        xhr.onerror = () => reject(new Error("Network error"));
-
-        abortController.signal.addEventListener("abort", () => xhr.abort());
-        if (abortController.signal.aborted) { xhr.abort(); return; }
-        xhr.send(formData);
+      // Auto-scroll
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
       });
 
-      setPendingUploads(prev => {
-        const next = new Map(prev);
-        const entry = next.get(tempId);
-        if (entry) next.set(tempId, { ...entry, progress: 95 });
-        return next;
-      });
+      try {
+        const sigRes = await fetchWithAuth("/api/upload/signature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId }),
+          signal: abortController.signal,
+        });
+        if (!sigRes.ok) throw new Error("Signature failed");
+        const sigData = await sigRes.json();
+        if (!sigData.success) throw new Error("Invalid signature");
+        const sig = sigData.data;
 
-      onSendMessage(caption || "Photo", imageUrl);
+        if (
+          !sig.signature ||
+          !sig.timestamp ||
+          !sig.apiKey ||
+          !sig.cloudName ||
+          !sig.folder
+        ) {
+          throw new Error("Incomplete upload credentials");
+        }
 
-      clearTimeout(uploadTimeout);
-      setPendingUploads(prev => { const next = new Map(prev); next.delete(tempId); return next; });
-    } catch (err: any) {
-      clearTimeout(uploadTimeout);
-      if (err?.name === "AbortError" || abortController.signal.aborted) {
-        setPendingUploads(prev => { const next = new Map(prev); next.delete(tempId); return next; });
-      } else {
-        console.error("[ChatRoom] Image upload error:", err);
-        setPendingUploads(prev => {
+        setPendingUploads((prev) => {
           const next = new Map(prev);
           const entry = next.get(tempId);
-          if (entry) next.set(tempId, { ...entry, status: 'failed', progress: 0, abortController: null });
+          if (entry) next.set(tempId, { ...entry, progress: 20 });
           return next;
         });
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("signature", sig.signature);
+        formData.append("timestamp", sig.timestamp.toString());
+        formData.append("api_key", sig.apiKey);
+        formData.append("folder", sig.folder);
+
+        const imageUrl = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open(
+            "POST",
+            `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
+          );
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = 20 + Math.round((e.loaded / e.total) * 70);
+              setPendingUploads((prev) => {
+                const next = new Map(prev);
+                const entry = next.get(tempId);
+                if (entry) next.set(tempId, { ...entry, progress: pct });
+                return next;
+              });
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(JSON.parse(xhr.responseText).secure_url);
+            } else {
+              reject(new Error(`Upload failed: ${xhr.status}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error("Network error"));
+
+          abortController.signal.addEventListener("abort", () => xhr.abort());
+          if (abortController.signal.aborted) {
+            xhr.abort();
+            return;
+          }
+          xhr.send(formData);
+        });
+
+        setPendingUploads((prev) => {
+          const next = new Map(prev);
+          const entry = next.get(tempId);
+          if (entry) next.set(tempId, { ...entry, progress: 95 });
+          return next;
+        });
+
+        onSendMessage(caption || "Photo", imageUrl);
+
+        clearTimeout(uploadTimeout);
+        setPendingUploads((prev) => {
+          const next = new Map(prev);
+          next.delete(tempId);
+          return next;
+        });
+      } catch (err: any) {
+        clearTimeout(uploadTimeout);
+        if (err?.name === "AbortError" || abortController.signal.aborted) {
+          setPendingUploads((prev) => {
+            const next = new Map(prev);
+            next.delete(tempId);
+            return next;
+          });
+        } else {
+          console.error("[ChatRoom] Image upload error:", err);
+          setPendingUploads((prev) => {
+            const next = new Map(prev);
+            const entry = next.get(tempId);
+            if (entry)
+              next.set(tempId, {
+                ...entry,
+                status: "failed",
+                progress: 0,
+                abortController: null,
+              });
+            return next;
+          });
+        }
       }
-    }
-  }, [orderId, onSendMessage]);
+    },
+    [orderId, onSendMessage],
+  );
 
   const cancelUpload = useCallback((tempId: string) => {
     const entry = pendingUploadsRef.current.get(tempId);
     if (entry?.abortController) entry.abortController.abort();
-    setPendingUploads(prev => { const next = new Map(prev); next.delete(tempId); return next; });
+    setPendingUploads((prev) => {
+      const next = new Map(prev);
+      next.delete(tempId);
+      return next;
+    });
   }, []);
 
-  const retryUpload = useCallback((tempId: string) => {
-    const entry = pendingUploadsRef.current.get(tempId);
-    if (!entry) return;
-    startImageUpload(entry.file, entry.localUrl, entry.caption, tempId);
-  }, [startImageUpload]);
+  const retryUpload = useCallback(
+    (tempId: string) => {
+      const entry = pendingUploadsRef.current.get(tempId);
+      if (!entry) return;
+      startImageUpload(entry.file, entry.localUrl, entry.caption, tempId);
+    },
+    [startImageUpload],
+  );
 
   // Legacy upload for non-image files (documents) — still blocking
   const uploadAndSend = useCallback(async () => {
     if (!pendingFile) return;
 
     // Images use optimistic path
-    if (pendingFile.category === 'image') {
+    if (pendingFile.category === "image") {
       const tempId = `temp-img-${Date.now()}`;
-      const file = await compressImage(pendingFile.file, { maxDimension: 1600, quality: 0.8 });
+      const file = await compressImage(pendingFile.file, {
+        maxDimension: 1600,
+        quality: 0.8,
+      });
       const localUrl = pendingFile.previewUrl || URL.createObjectURL(file);
       const caption = messageText.trim();
       setPendingFile(null);
@@ -799,9 +862,15 @@ export function ChatRoom({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId }),
       });
-      if (!sigRes.ok) { setIsUploading(false); return; }
+      if (!sigRes.ok) {
+        setIsUploading(false);
+        return;
+      }
       const sigData = await sigRes.json();
-      if (!sigData.success) { setIsUploading(false); return; }
+      if (!sigData.success) {
+        setIsUploading(false);
+        return;
+      }
       const sig = sigData.data;
 
       const formData = new FormData();
@@ -814,21 +883,28 @@ export function ChatRoom({
       const fileUrl: string | null = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.upload.addEventListener("progress", (e) => {
-          if (e.lengthComputable) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          if (e.lengthComputable)
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
         });
         xhr.addEventListener("load", () => {
-          if (xhr.status === 200) resolve(JSON.parse(xhr.responseText).secure_url);
+          if (xhr.status === 200)
+            resolve(JSON.parse(xhr.responseText).secure_url);
           else reject(new Error("Upload failed"));
         });
         xhr.addEventListener("error", () => reject(new Error("Network error")));
-        xhr.open("POST", `https://api.cloudinary.com/v1_1/${sig.cloudName}/raw/upload`);
+        xhr.open(
+          "POST",
+          `https://api.cloudinary.com/v1_1/${sig.cloudName}/raw/upload`,
+        );
         xhr.send(formData);
       });
 
       if (fileUrl) {
         onSendMessage(messageText.trim() || pendingFile.file.name, undefined, {
-          fileUrl, fileName: pendingFile.file.name,
-          fileSize: pendingFile.file.size, mimeType: pendingFile.file.type,
+          fileUrl,
+          fileName: pendingFile.file.name,
+          fileSize: pendingFile.file.size,
+          mimeType: pendingFile.file.type,
         });
         setMessageText("");
       }
@@ -839,7 +915,14 @@ export function ChatRoom({
       setUploadProgress(0);
       clearPendingFile();
     }
-  }, [pendingFile, orderId, messageText, onSendMessage, clearPendingFile, startImageUpload]);
+  }, [
+    pendingFile,
+    orderId,
+    messageText,
+    onSendMessage,
+    clearPendingFile,
+    startImageUpload,
+  ]);
 
   // Cleanup preview URL on unmount
   useEffect(() => {
@@ -928,12 +1011,16 @@ export function ChatRoom({
         {isLoadingOlder && (
           <div className="flex items-center justify-center py-3">
             <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-            <span className="ml-2 text-[11px] text-gray-500">Loading older messages…</span>
+            <span className="ml-2 text-[11px] text-gray-500">
+              Loading older messages…
+            </span>
           </div>
         )}
         {!hasOlderMessages && messages.length > 0 && (
           <div className="text-center py-2">
-            <span className="text-[10px] text-gray-600">Beginning of conversation</span>
+            <span className="text-[10px] text-gray-600">
+              Beginning of conversation
+            </span>
           </div>
         )}
 
@@ -958,7 +1045,7 @@ export function ChatRoom({
               <div key={msg.id} className="flex justify-center my-2">
                 <div className="px-3 py-1.5 bg-white/[0.03] rounded-full border border-white/[0.04]">
                   <p className="text-[11px] text-gray-500 text-center">
-                    {msg.text}
+                    {personalizeAppealMessage(msg.text, viewerRole)}
                   </p>
                 </div>
               </div>
@@ -969,11 +1056,13 @@ export function ChatRoom({
           // chat bubble so the card doesn't get squeezed by max-w-[75%] +
           // bubble padding + double background chrome.
           if (msg.messageType === "receipt") {
-            let payload: Record<string, unknown> | null = msg.receiptData ?? null;
+            let payload: Record<string, unknown> | null =
+              msg.receiptData ?? null;
             if (!payload && msg.text) {
               try {
                 const parsed = JSON.parse(msg.text);
-                if (parsed.type === 'order_receipt' && parsed.data) payload = parsed.data;
+                if (parsed.type === "order_receipt" && parsed.data)
+                  payload = parsed.data;
                 else payload = parsed;
               } catch {}
             }
@@ -1018,20 +1107,36 @@ export function ChatRoom({
                 </div>
               )}
               <div
-                className={`flex gap-2 ${isMe ? "flex-row-reverse" : "flex-row"} ${msg.isHighlighted ? "ring-1 ring-yellow-500/50 rounded-lg p-1 bg-yellow-500/5" : ""} ${isFocusedOrder ? "opacity-100" : focusOrderId ? "opacity-60" : ""}`}
+                className={`flex gap-2 ${
+                  isMe ? "flex-row-reverse" : "flex-row"
+                } ${
+                  msg.isHighlighted
+                    ? "ring-1 ring-yellow-500/50 rounded-lg p-1 bg-yellow-500/5"
+                    : ""
+                } ${
+                  isFocusedOrder
+                    ? "opacity-100"
+                    : focusOrderId
+                    ? "opacity-60"
+                    : ""
+                }`}
               >
                 {/* Avatar */}
                 {!isMe && (
                   <SenderAvatar
                     senderType={msg.senderType}
                     senderName={displayName}
-                    avatarUrl={msg.senderType === "user" ? userAvatarUrl : undefined}
+                    avatarUrl={
+                      msg.senderType === "user" ? userAvatarUrl : undefined
+                    }
                   />
                 )}
 
                 {/* Message bubble */}
                 <div
-                  className={`max-w-[75%] ${isMe ? "items-end" : "items-start"}`}
+                  className={`max-w-[75%] ${
+                    isMe ? "items-end" : "items-start"
+                  }`}
                 >
                   {/* Sender name + role.
                       Only the compliance badge is shown — the Buyer/Seller
@@ -1040,7 +1145,13 @@ export function ChatRoom({
                   {!isMe && (
                     <div className="flex items-center gap-1.5 mb-0.5 px-1">
                       <span
-                        className={`text-[11px] font-medium ${roleColor.name}`}
+                        className={`text-[11px] font-medium ${
+                          counterpartyNameClass &&
+                          (msg.senderType === "user" ||
+                            msg.senderType === "merchant")
+                            ? `${counterpartyNameClass} px-1.5 py-0.5 rounded`
+                            : roleColor.name
+                        }`}
                       >
                         {displayName}
                       </span>
@@ -1059,21 +1170,23 @@ export function ChatRoom({
                       isMe
                         ? "rounded-2xl rounded-br-sm"
                         : msg.from === "compliance"
-                          ? "rounded-2xl rounded-bl-sm"
-                          : "rounded-2xl rounded-bl-sm"
+                        ? "rounded-2xl rounded-bl-sm"
+                        : "rounded-2xl rounded-bl-sm"
                     }`}
                     style={{
                       background: isMe
                         ? "var(--chat-own-bg)"
                         : msg.from === "compliance"
-                          ? "rgba(239,68,68,0.12)"
-                          : "var(--chat-them-bg)",
+                        ? "rgba(239,68,68,0.12)"
+                        : "var(--chat-them-bg)",
                       border: isMe
                         ? "1px solid var(--chat-own-border)"
                         : msg.from === "compliance"
-                          ? "1px solid rgba(239,68,68,0.15)"
-                          : "1px solid var(--chat-them-border)",
-                      color: isMe ? "var(--chat-own-text)" : "var(--chat-them-text)",
+                        ? "1px solid rgba(239,68,68,0.15)"
+                        : "1px solid var(--chat-them-border)",
+                      color: isMe
+                        ? "var(--chat-own-text)"
+                        : "var(--chat-them-text)",
                     }}
                   >
                     {/* Image content */}
@@ -1098,7 +1211,10 @@ export function ChatRoom({
                     {msg.messageType !== "image" &&
                       msg.messageType !== "file" &&
                       msg.text && (
-                        <p className="text-sm whitespace-pre-wrap break-words" style={{ color: "inherit" }}>
+                        <p
+                          className="text-sm whitespace-pre-wrap break-words"
+                          style={{ color: "inherit" }}
+                        >
                           {msg.text}
                         </p>
                       )}
@@ -1112,9 +1228,14 @@ export function ChatRoom({
 
                     {/* Timestamp + status */}
                     <div
-                      className={`flex items-center gap-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}
+                      className={`flex items-center gap-1 mt-1 ${
+                        isMe ? "justify-end" : "justify-start"
+                      }`}
                     >
-                      <span className="text-[10px]" style={{ opacity: 0.45, color: "inherit" }}>
+                      <span
+                        className="text-[10px]"
+                        style={{ opacity: 0.45, color: "inherit" }}
+                      >
                         {formatTime(msg.timestamp)}
                       </span>
                       {isMe && <MessageStatusIcon status={msg.status} />}
@@ -1154,7 +1275,14 @@ export function ChatRoom({
         {/* Typing indicator */}
         {isTyping && (
           <div className="flex items-center gap-2 px-2">
-            <SenderAvatar senderType={typingActorType} senderName={typingActorType === "user" ? (userName || "User") : (merchantName || "Seller")} />
+            <SenderAvatar
+              senderType={typingActorType}
+              senderName={
+                typingActorType === "user"
+                  ? userName || "User"
+                  : merchantName || "Seller"
+              }
+            />
             <div className="px-3 py-2 bg-white/[0.03] rounded-2xl border border-white/[0.04]">
               <div className="flex items-center gap-1">
                 <span className="text-[11px] text-gray-500">
@@ -1180,25 +1308,24 @@ export function ChatRoom({
         )}
 
         {/* Pending image upload bubbles — optimistic UI */}
-        {pendingUploads.size > 0 && (
+        {pendingUploads.size > 0 &&
           Array.from(pendingUploads.values())
-          .sort((a, b) => a.createdAt - b.createdAt)
-          .map((upload) => (
-            <div key={upload.tempId} className="flex justify-end px-3 mb-1">
-              <div className="max-w-[75%] rounded-lg rounded-br-sm bg-primary/10 border border-primary/15 p-1.5">
-                <ImageMessageBubble
-                  imageUrl={upload.localUrl}
-                  caption={upload.caption || undefined}
-                  uploadStatus={upload.status}
-                  uploadProgress={upload.progress}
-                  onCancel={() => cancelUpload(upload.tempId)}
-                  onRetry={() => retryUpload(upload.tempId)}
-                  isOwn
-                />
+            .sort((a, b) => a.createdAt - b.createdAt)
+            .map((upload) => (
+              <div key={upload.tempId} className="flex justify-end px-3 mb-1">
+                <div className="max-w-[75%] rounded-lg rounded-br-sm bg-primary/10 border border-primary/15 p-1.5">
+                  <ImageMessageBubble
+                    imageUrl={upload.localUrl}
+                    caption={upload.caption || undefined}
+                    uploadStatus={upload.status}
+                    uploadProgress={upload.progress}
+                    onCancel={() => cancelUpload(upload.tempId)}
+                    onRetry={() => retryUpload(upload.tempId)}
+                    isOwn
+                  />
+                </div>
               </div>
-            </div>
-          ))
-        )}
+            ))}
 
         <div ref={messagesEndRef} />
       </div>
@@ -1250,7 +1377,10 @@ export function ChatRoom({
       )}
 
       {/* Input area — WhatsApp-style toolbar */}
-      <div className="px-3 py-2 border-t border-white/[0.05]" style={{ background: "rgba(14,14,16,0.98)" }}>
+      <div
+        className="px-3 py-2 border-t border-white/[0.05]"
+        style={{ background: "rgba(14,14,16,0.98)" }}
+      >
         {/* Chat-closed banner — replaces the input row entirely when the
             backend (or the order's terminal status) has disabled chat.
             Compliance reviewers can still see the input via the freeze
@@ -1259,7 +1389,8 @@ export function ChatRoom({
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] text-[12px] text-foreground/50">
             <Lock className="w-3.5 h-3.5 text-foreground/40 shrink-0" />
             <span className="truncate">
-              {chatReason || "This chat is closed. You can no longer send messages."}
+              {chatReason ||
+                "This chat is closed. You can no longer send messages."}
             </span>
           </div>
         ) : null}
@@ -1288,87 +1419,95 @@ export function ChatRoom({
         )}
 
         {(chatEnabled || currentUserType === "compliance") && (
-        <div className="flex items-center gap-2 w-full">
-          {/* Hidden native file picker — triggered by the paperclip button inside the pill */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,.pdf,.doc,.docx"
-            onChange={handleFileSelect}
-            className="hidden"
-            disabled={
-              disabled ||
-              isUploading ||
-              (isFrozen && currentUserType !== "compliance")
-            }
-          />
+          <div className="flex items-center gap-2 w-full">
+            {/* Hidden native file picker — triggered by the paperclip button inside the pill */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.pdf,.doc,.docx"
+              onChange={handleFileSelect}
+              className="hidden"
+              disabled={
+                disabled ||
+                isUploading ||
+                (isFrozen && currentUserType !== "compliance")
+              }
+            />
 
-          {/* Pill container: text input + attach button live inside one rounded row
+            {/* Pill container: text input + attach button live inside one rounded row
               so the Send button can never be pushed off-screen by long text.
               min-w-0 on the flex parent is the critical bit — without it the
               <input> can overflow its flex cell on narrow screens. */}
-          <div className="flex-1 min-w-0 flex items-center gap-1 rounded-full pl-4 pr-1.5 transition-colors" style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.09)" }}>
-            {/* Text input — disabled when chat is closed/frozen/waiting */}
-            <input
-              ref={inputRef}
-              type="text"
-              name="chat-message"
-              autoComplete="off"
-              maxLength={1000}
-              value={messageText}
-              onChange={(e) => handleTypingChange(e.target.value.slice(0, 1000))}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                !chatEnabled && chatReason
-                  ? chatReason
-                  : isFrozen && currentUserType !== "compliance"
-                  ? "Chat is frozen..."
-                  : "Type a message..."
-              }
-              disabled={
-                disabled ||
-                isUploading ||
-                !chatEnabled ||
-                (isFrozen && currentUserType !== "compliance")
-              }
-              className="flex-1 min-w-0 appearance-none border-0 bg-transparent py-2.5 text-sm text-foreground placeholder:text-foreground/30 outline-none focus-visible:outline-none disabled:opacity-40"
-            />
-
-            {/* Attach-file trigger — shrink-0 so it holds its width when text is long */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={
-                disabled ||
-                isUploading ||
-                (isFrozen && currentUserType !== "compliance")
-              }
-              className="shrink-0 p-2 rounded-full hover:bg-foreground/[0.06] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              title="Attach file"
+            <div
+              className="flex-1 min-w-0 flex items-center gap-1 rounded-full pl-4 pr-1.5 transition-colors"
+              style={{
+                background: "rgba(255,255,255,0.07)",
+                border: "1px solid rgba(255,255,255,0.09)",
+              }}
             >
-              <Paperclip className="w-4 h-4 text-foreground/40" />
+              {/* Text input — disabled when chat is closed/frozen/waiting */}
+              <input
+                ref={inputRef}
+                type="text"
+                name="chat-message"
+                autoComplete="off"
+                maxLength={1000}
+                value={messageText}
+                onChange={(e) =>
+                  handleTypingChange(e.target.value.slice(0, 1000))
+                }
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  !chatEnabled && chatReason
+                    ? chatReason
+                    : isFrozen && currentUserType !== "compliance"
+                    ? "Chat is frozen..."
+                    : "Type a message..."
+                }
+                disabled={
+                  disabled ||
+                  isUploading ||
+                  !chatEnabled ||
+                  (isFrozen && currentUserType !== "compliance")
+                }
+                className="flex-1 min-w-0 appearance-none border-0 bg-transparent py-2.5 text-sm text-foreground placeholder:text-foreground/30 outline-none focus-visible:outline-none disabled:opacity-40"
+              />
+
+              {/* Attach-file trigger — shrink-0 so it holds its width when text is long */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={
+                  disabled ||
+                  isUploading ||
+                  (isFrozen && currentUserType !== "compliance")
+                }
+                className="shrink-0 p-2 rounded-full hover:bg-foreground/[0.06] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Attach file"
+              >
+                <Paperclip className="w-4 h-4 text-foreground/40" />
+              </button>
+            </div>
+
+            {/* Send button — circular, sits outside the pill. shrink-0 keeps it
+              at a fixed size; the row never wraps. */}
+            <button
+              onClick={handleSend}
+              disabled={
+                disabled ||
+                isUploading ||
+                (isFrozen && currentUserType !== "compliance") ||
+                (!messageText.trim() && !pendingFile)
+              }
+              className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+              style={{ background: "linear-gradient(135deg,#2f6ae0,#1a56c4)" }}
+            >
+              {isUploading ? (
+                <Loader2 className="w-4 h-4 text-background animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 text-background" />
+              )}
             </button>
           </div>
-
-          {/* Send button — circular, sits outside the pill. shrink-0 keeps it
-              at a fixed size; the row never wraps. */}
-          <button
-            onClick={handleSend}
-            disabled={
-              disabled ||
-              isUploading ||
-              (isFrozen && currentUserType !== "compliance") ||
-              (!messageText.trim() && !pendingFile)
-            }
-            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            style={{ background: "linear-gradient(135deg,#2f6ae0,#1a56c4)" }}
-          >
-            {isUploading ? (
-              <Loader2 className="w-4 h-4 text-background animate-spin" />
-            ) : (
-              <Send className="w-4 h-4 text-background" />
-            )}
-          </button>
-        </div>
         )}
       </div>
     </div>

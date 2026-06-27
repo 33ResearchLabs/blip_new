@@ -19,7 +19,6 @@ import {
   NotificationToastContainer,
   useToast,
 } from "@/components/NotificationToast";
-import { ChatToastHost } from "@/components/user/ChatToastHost";
 import { useUserAuth } from "@/hooks/useUserAuth";
 import { UserModals } from "@/components/user/UserModals";
 import { useUserDataFetching } from "@/hooks/useUserDataFetching";
@@ -466,16 +465,7 @@ export default function UserDesktopPage() {
       className={`user-scope ${isUserLight ? "user-light" : ""}`}
       style={{ display: "flex", minHeight: "100dvh", background: "#080810", fontFamily: "Manrope, sans-serif" }}
     >
-      <NotificationToastContainer position="top-right" />
-
-      {auth.userId && (
-        <ChatToastHost
-          onOpenChat={(orderId) => {
-            setActiveOrderId(orderId);
-            setScreen("chat-view");
-          }}
-        />
-      )}
+      <NotificationToastContainer variant="card" />
 
       {/* Onboarding overlay */}
       {showOnboarding && !!auth.userId && (
@@ -772,6 +762,10 @@ export default function UserDesktopPage() {
                 notifications={notifications}
                 onMarkRead={(id) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))}
                 onMarkAllRead={() => setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))}
+                onOpenOrder={(orderId) => {
+                  setActiveOrderId(orderId);
+                  setScreen("order");
+                }}
                 unreadCount={notifications.filter((n) => !n.read).length}
                 maxW={maxW}
                 hideBottomNav
@@ -909,6 +903,7 @@ export default function UserDesktopPage() {
                 setPendingTradeData={setPendingTradeData}
                 toast={toast}
                 maxW={maxW}
+                matched={userEffects.matched}
               />
             </CenterPanel>
           )}
@@ -938,9 +933,6 @@ export default function UserDesktopPage() {
         solanaWallet={solanaWallet}
         showUsernameModal={auth.showUsernameModal}
         handleWalletUsername={auth.handleWalletUsername}
-        showAcceptancePopup={userEffects.showAcceptancePopup}
-        setShowAcceptancePopup={userEffects.setShowAcceptancePopup}
-        acceptedOrderInfo={userEffects.acceptedOrderInfo}
       />
 
       <PushPermissionPrompt authed={!!auth.userId} />

@@ -10,7 +10,16 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { orderActionKey } from '@/lib/api/idempotencyKeys';
 import { getUserChannel } from "@/lib/pusher/channels";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
-import { emitChatToast } from "@/lib/chat/chatToastBus";
+import { stageMessage, type TradeRole } from "@/lib/notifications/notificationCopy";
+import { isDuplicateRealtimeEvent } from "@/lib/notifications/realtimeDedup";
+import { formatCrypto } from "@/lib/format";
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 // ── Auto-refund "already handled" persistence ──────────────────────────────
 // The client-side auto-refund scan (below) records every order whose on-chain
@@ -92,14 +101,38 @@ export function useUserEffects({
 }: UseUserEffectsParams) {
   const [matchingTimeLeft, setMatchingTimeLeft] = useState<number>(15 * 60);
   const [timerTick, setTimerTick] = useState(0);
-  const [showAcceptancePopup, setShowAcceptancePopup] = useState(false);
-  const [acceptedOrderInfo, setAcceptedOrderInfo] = useState<{
-    merchantName: string;
-    cryptoAmount: number;
-    fiatAmount: number;
-    fiatCurrency: string;
-    orderType: 'buy' | 'sell';
-  } | null>(null);
+  // Brief "Merchant matched" celebration shown on the matching screen before we
+  // navigate to the order/payment view. Frontend-only: every existing toast /
+  // sound / side-effect still fires immediately; only the navigation is held by
+  // ~1.4s so the user sees the hand-off instead of an abrupt screen swap.
+  const [matched, setMatched] = useState<{ merchantName?: string } | null>(null);
+  const matchedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Per-order guard so a single match is acknowledged exactly once across the
+  // accept (status) + claim (merchant_id) paths, reconnects, and duplicate
+  // sockets. Once an order id is in here, all repeat feedback is skipped.
+  const acknowledgedMatchRef = useRef<Set<string>>(new Set());
+  const beginMatchedCelebration = useCallback(
+    (merchantName?: string) => {
+      if (prefersReducedMotion()) {
+        setScreen("order");
+        return;
+      }
+      if (matchedTimerRef.current) return; // fire-once — ignore repeat events
+      setMatched({ merchantName });
+      matchedTimerRef.current = setTimeout(() => {
+        matchedTimerRef.current = null;
+        setMatched(null);
+        setScreen("order");
+      }, 1400);
+    },
+    [setScreen],
+  );
+  useEffect(
+    () => () => {
+      if (matchedTimerRef.current) clearTimeout(matchedTimerRef.current);
+    },
+    [],
+  );
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
   const [showChat, setShowChat] = useState(false);
@@ -124,6 +157,10 @@ export function useUserEffects({
   }, []);
 
   const showBrowserNotification = useCallback((title: string, body: string, orderId?: string) => {
+    // Only surface an OS notification when the app isn't on screen — anything
+    // the user is actively viewing is already acknowledged in-app, so a browser
+    // notification there would just duplicate it.
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') return;
     if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
       const notification = new Notification(title, {
         body,
@@ -173,24 +210,23 @@ export function useUserEffects({
         return o;
       }));
 
-      if (message.from === 'them' && (screen !== 'order' || activeOrderId !== orderId)) {
+      if (
+        message.from === 'them' &&
+        (screen !== 'order' || activeOrderId !== orderId) &&
+        // Guard against the same message arriving via overlapping channels
+        // (order + private) firing two notifications.
+        !isDuplicateRealtimeEvent('chat-toast-user', message.id)
+      ) {
         const order = orders.find(o => o.id === orderId);
         const merchantName = order?.merchant?.name || 'Merchant';
-        toast.showNewMessage(merchantName, message.text?.substring(0, 80));
         showBrowserNotification(
           `New message from ${merchantName}`,
           message.text.substring(0, 100),
           orderId
         );
-        // Emit to in-app chat toast stack (ChatToastHost subscribes).
-        // No-op when no listener is mounted → zero regression.
-        emitChatToast({
-          orderId,
-          senderName: merchantName,
-          preview: (message.text || '').slice(0, 120),
-          avatarUrl: order?.merchant?.avatarUrl ?? null,
-          timestamp: Date.now(),
-        });
+        // Message notifications use the standard themed toast (Design A) so they
+        // match every other notification's look (icon tile + theme tokens).
+        toast.showNewMessage(merchantName, message.text?.substring(0, 80));
       }
     },
   });
@@ -313,28 +349,52 @@ export function useUserEffects({
   // Real-time order updates for active order
   const { order: realtimeOrder, refetch: refetchActiveOrder } = useRealtimeOrder(activeOrderId, {
     onStatusChange: (newStatus, previousStatus, orderData) => {
+      // Role-aware, concise stage copy. In the user app the logged-in user is
+      // always the order's user_id party: buyer on a BUY, seller on a SELL.
+      const stageRole: TradeRole = orderData?.type === 'sell' ? 'seller' : 'buyer';
+      const stageMerchant = orderData?.merchant?.display_name || orderData?.merchant?.business_name || '';
+      const stageAmt = orderData?.crypto_amount ? `${formatCrypto(orderData.crypto_amount)} USDT` : '';
+      // Show a meaningful toast (which also records a panel entry via the wrap)
+      // for the given status, falling back to `fallback` when no milestone copy
+      // applies. `type`/`duration` preserve the previous per-stage toast feel.
+      const stageToast = (
+        type: 'order' | 'escrow' | 'payment' | 'dispute' | 'complete' | 'system' | 'warning',
+        title: string,
+        fallback: string,
+        duration?: number,
+      ) => {
+        const message = stageMessage(newStatus, stageRole, { amount: stageAmt || undefined, counterparty: stageMerchant || undefined }) ?? fallback;
+        toast.show({ type, title, message, orderId: activeOrderId ?? undefined, ...(duration ? { duration } : {}) });
+      };
+
       const wasPending = previousStatus === 'pending' || previousStatus === 'escrowed' || (!previousStatus && screen === 'matching');
       if (wasPending && (newStatus === 'accepted' || newStatus === 'escrowed')) {
         const merchantName = orderData?.merchant?.display_name || orderData?.merchant?.business_name || 'Merchant';
-        playSound('notification');
+        // Acknowledge a match exactly once per order (see acknowledgedMatchRef).
+        const firstAck = !activeOrderId || !acknowledgedMatchRef.current.has(activeOrderId);
+        if (activeOrderId) acknowledgedMatchRef.current.add(activeOrderId);
 
-        setAcceptedOrderInfo({
-          merchantName,
-          cryptoAmount: orderData?.crypto_amount || 0,
-          fiatAmount: orderData?.fiat_amount || 0,
-          fiatCurrency: (orderData as any)?.fiat_currency || '',
-          orderType: orderData?.type || 'buy',
-        });
-        setShowAcceptancePopup(true);
-        setTimeout(() => setShowAcceptancePopup(false), 5000);
-        toast.showMerchantAccepted(merchantName);
-        showBrowserNotification('Order Accepted!', `${merchantName} accepted your ${orderData?.type || 'buy'} order`, activeOrderId || undefined);
+        if (firstAck) {
+          playSound('notification');
 
-        if (screen === "matching") {
-          setPendingTradeData(null);
-        }
-        if (screen !== "order") {
-          setScreen("order");
+          // On the matching screen the full-screen celebration IS the primary
+          // acknowledgement — suppress the duplicate toast. Off that screen (or
+          // under reduced motion, where no celebration runs) the toast stays the
+          // primary acknowledgement.
+          const willCelebrate = screen === "matching" && !prefersReducedMotion();
+          if (!willCelebrate) {
+            stageToast('order', 'Order Accepted', `${merchantName} accepted your order`, 6000);
+          }
+          showBrowserNotification('Order Accepted!', `${merchantName} accepted your ${orderData?.type || 'buy'} order`, activeOrderId || undefined);
+
+          if (screen === "matching") {
+            // Brief "Merchant matched" celebration, then navigate. The helper
+            // falls back to an instant nav under reduced-motion.
+            setPendingTradeData(null);
+            beginMatchedCelebration(merchantName);
+          } else if (screen !== "order") {
+            setScreen("order");
+          }
         }
       }
 
@@ -344,7 +404,7 @@ export function useUserEffects({
         setAmount("");
         setSelectedOffer(null);
         playSound('notification');
-        toast.showEscrowLocked();
+        stageToast('escrow', 'Escrow Locked', 'Funds locked in escrow');
       }
 
       if (newStatus === 'payment_sent') {
@@ -352,25 +412,25 @@ export function useUserEffects({
           setScreen("order");
         }
         playSound('notification');
-        toast.showPaymentSent();
+        stageToast('payment', 'Payment Sent', 'Payment marked as sent', 8000);
         showBrowserNotification('Payment Sent', 'Your fiat payment has been marked as sent. Waiting for confirmation.', activeOrderId || undefined);
       }
 
       if (newStatus === 'payment_confirmed') {
         playSound('notification');
-        toast.show({ type: 'payment', title: 'Payment Confirmed', message: 'Payment has been confirmed!' });
+        stageToast('payment', 'Payment Confirmed', 'Payment confirmed');
       }
 
       if (newStatus === 'releasing') {
-        toast.showEscrowReleased();
+        stageToast('complete', 'Releasing', 'Funds are being released', 6000);
       }
 
       if (newStatus === 'completed') {
         playSound('trade_complete');
-        // Pass the orderId (2nd arg) so the persistent notification list dedupes
-        // this completion per-order — overlapping realtime/polling/reconciliation
+        // Pass the orderId so the persistent notification list dedupes this
+        // completion per-order — overlapping realtime/polling/reconciliation
         // sources otherwise stacked ~10 identical "Trade Complete" rows.
-        toast.showTradeComplete(undefined, activeOrderId ?? undefined);
+        stageToast('complete', 'Trade Complete', 'Trade completed', 6000);
         showBrowserNotification('Trade Complete!', 'Your trade has been completed successfully.', activeOrderId || undefined);
         if (solanaWallet.connected) {
           solanaWallet.refreshBalances();
@@ -384,7 +444,7 @@ export function useUserEffects({
 
       if (newStatus === 'disputed') {
         playSound('error');
-        toast.showDisputeOpened();
+        stageToast('dispute', 'Dispute Opened', 'A dispute has been raised', 10000);
         showBrowserNotification('Dispute Opened', 'A dispute has been raised on your order.', activeOrderId || undefined);
         if (screen === 'escrow' || screen === 'matching') {
           setScreen('order');
@@ -393,7 +453,7 @@ export function useUserEffects({
 
       if (newStatus === 'cancelled') {
         playSound('error');
-        toast.showOrderCancelled();
+        stageToast('warning', 'Order Cancelled', 'Order cancelled', 6000);
         // Keep the user on the order tracker so the SAME screen updates in
         // place to the cancelled state (OrderTrackingView's cancelled banner)
         // — the autoTracker/isMatching fix means 'order' no longer reopens as
@@ -404,7 +464,7 @@ export function useUserEffects({
       }
 
       if (newStatus === 'expired') {
-        toast.showOrderExpired();
+        stageToast('warning', 'Order Expired', 'Order expired', 6000);
         if (screen === 'escrow' || screen === 'matching') {
           setScreen('order');
         }
@@ -483,21 +543,26 @@ export function useUserEffects({
     // Merchant just got assigned (claim transition on sell order)
     if (merchantId && !prevMerchantId && (screen === 'escrow' || screen === 'matching')) {
       const merchantName = (realtimeOrder as any).merchant?.display_name || 'Merchant';
-      playSound('notification');
-      toast.showMerchantAccepted(merchantName);
-      setAcceptedOrderInfo({
-        merchantName,
-        cryptoAmount: (realtimeOrder as any).crypto_amount || 0,
-        fiatAmount: (realtimeOrder as any).fiat_amount || 0,
-        fiatCurrency: (realtimeOrder as any).fiat_currency || '',
-        orderType: (realtimeOrder as any).type || 'sell',
-      });
-      setShowAcceptancePopup(true);
-      setTimeout(() => setShowAcceptancePopup(false), 5000);
-      if (screen === 'matching') setPendingTradeData(null);
-      setScreen('order');
+      // Same per-order guard as the accept path — whichever fires first wins, so
+      // a claim that follows an accept (or a duplicate event) produces nothing.
+      const firstAck = !activeOrderId || !acknowledgedMatchRef.current.has(activeOrderId);
+      if (activeOrderId) acknowledgedMatchRef.current.add(activeOrderId);
+      if (firstAck) {
+        playSound('notification');
+        const willCelebrate = screen === 'matching' && !prefersReducedMotion();
+        if (!willCelebrate) {
+          // Standard themed toast (Design A) only — no AcceptancePopup card.
+          toast.showMerchantAccepted(merchantName);
+        }
+        if (screen === 'matching') {
+          setPendingTradeData(null);
+          beginMatchedCelebration(merchantName);
+        } else {
+          setScreen('order');
+        }
+      }
     }
-  }, [realtimeOrder, activeOrderId, screen]);
+  }, [realtimeOrder, activeOrderId, screen, beginMatchedCelebration, setPendingTradeData]);
 
   // Active order: merge real-time data with list data, preserving optimistic updates
   const orderFromList = orders.find(o => o.id === activeOrderId);
@@ -654,6 +719,12 @@ export function useUserEffects({
     // never subscribes to private-order-{id} until they explicitly click the
     // chat button — and any merchant message that arrives in the meantime
     // only shows up on refresh (when GET /messages re-fetches the inserted row).
+    //
+    // IMPORTANT: subscribing must NOT mark the thread read or clear unread.
+    // Sitting on the order screen with the chat panel CLOSED is not "reading" —
+    // clearing unread here would stop an incoming message from ever surfacing
+    // on the chat icon. Read-marking happens only when the chat is actually
+    // open (see the read effect just below).
     const shouldSubscribe = (screen === "chat-view" || screen === "order") && !!order;
     if (shouldSubscribe && order.id !== prevChatViewOrderRef.current) {
       prevChatViewOrderRef.current = order.id;
@@ -662,16 +733,6 @@ export function useUserEffects({
         "\uD83C\uDFEA",
         order.id
       );
-      // Mark merchant's messages as read once when user enters chat
-      setTimeout(() => {
-        const chat = chatWindowsRef2.current.find(w => w.orderId === order.id);
-        if (chat) markAsReadRef.current(chat.id);
-      }, 500);
-      // Also clear the inbox unread counter for this order so the Chat-button
-      // badge disappears as soon as the user is looking at the thread.
-      setOrders(prev => prev.map(o =>
-        o.id === order.id ? { ...o, unreadCount: 0 } : o
-      ));
     }
     if (!shouldSubscribe) {
       prevChatViewOrderRef.current = null;
@@ -691,6 +752,23 @@ export function useUserEffects({
       });
     }
   }, [showChat, screen, activeChat?.messages?.length]);
+
+  // Mark the thread read + clear the unread badge ONLY when the chat panel is
+  // actually open (showChat) or on the dedicated chat-view screen. This is the
+  // counterpart to the subscribe-only effect above: being on the order screen
+  // with the chat closed leaves unread intact so an incoming message shows on
+  // the chat icon; opening the chat is what marks it read. Re-runs as messages
+  // arrive so a message that lands WHILE the chat is open is also marked read.
+  useEffect(() => {
+    if (!(showChat || screen === "chat-view")) return;
+    const order = activeOrderRef.current;
+    if (!order) return;
+    const chat = chatWindowsRef2.current.find(w => w.orderId === order.id);
+    if (chat) markAsReadRef.current(chat.id);
+    setOrders(prev =>
+      prev.map(o => (o.id === order.id && o.unreadCount ? { ...o, unreadCount: 0 } : o)),
+    );
+  }, [showChat, screen, activeOrder?.id, activeChat?.messages?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSendMessage = useCallback(() => {
     if (!activeChat || !chatMessage.trim()) return;
@@ -889,6 +967,7 @@ export function useUserEffects({
   return {
     matchingTimeLeft,
     timerTick,
+    matched,
     formatTimeLeft,
     activeOrder,
     realtimeOrder,
@@ -910,8 +989,5 @@ export function useUserEffects({
     loadOlderMessages,
     hasOlderMessages,
     isLoadingOlderMessages,
-    // Acceptance popup
-    showAcceptancePopup, setShowAcceptancePopup,
-    acceptedOrderInfo,
   };
 }

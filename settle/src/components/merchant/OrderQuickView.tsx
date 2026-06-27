@@ -66,6 +66,8 @@ import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
 import { deriveCounterparty } from "@/components/shared/profile/counterparty";
 import { MerchantAppealSheet } from "@/components/merchant/MerchantAppealSheet";
+import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
+import { useOrderAppeal, isActiveAppeal } from "@/hooks/useOrderAppeal";
 
 // ── Counterparty profile wiring ──────────────────────────────────────────────
 // The popup is one big tree of sub-component bodies (CounterpartyTrustCard,
@@ -3069,6 +3071,10 @@ export function OrderQuickView({
   // already 'buyer' for the creator (see getAllPendingOrdersForMerchant).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const qvDb = (selectedOrder?.dbOrder ?? {}) as any;
+  // Hide "Raise Appeal" once an appeal is already open/proposed (the inline
+  // banner carries the resolution actions; a second appeal can't be raised).
+  const { appeal: qvAppeal } = useOrderAppeal(selectedOrder?.id, { enabled: !!selectedOrder });
+  const qvAppealActive = isActiveAppeal(qvAppeal);
   const isOwnPendingBuy =
     !!selectedOrder &&
     selectedOrder.myRole === "buyer" &&
@@ -3204,10 +3210,10 @@ export function OrderQuickView({
                 ? "fixed inset-0 z-50 w-full h-dvh max-h-dvh flex flex-col overflow-hidden pb-safe"
                 : `fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${
                     isActiveOrder
-                      ? "max-w-2xl"
-                      : isAcceptableBuyOrder
                       ? "max-w-xl"
-                      : "max-w-md"
+                      : isAcceptableBuyOrder || isOwnPendingBuy
+                      ? "max-w-lg"
+                      : "max-w-sm"
                   } lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[90%] max-h-[90dvh] flex flex-col overflow-hidden rounded-t-2xl lg:rounded-2xl shadow-2xl pb-safe lg:pb-0`
             }
             style={{
@@ -3295,9 +3301,17 @@ export function OrderQuickView({
                     }
                     role={qvCounterparty ? "button" : undefined}
                   >
-                    <div className="w-12 h-12 rounded-xl bg-foreground/5 flex items-center justify-center text-2xl border border-foreground/[0.04]">
-                      {selectedOrder.emoji}
-                    </div>
+                    {/* Counterparty avatar — same src/seed as the order cards
+                        and the Trade Parties panel so the picture is identical
+                        across list → detail (was an emoji, which read as a
+                        different avatar on open). */}
+                    <UserAvatar
+                      src={selectedOrder.user_avatar}
+                      seed={selectedOrder.user}
+                      size={48}
+                      alt={selectedOrder.user}
+                      style={{ borderRadius: 12 }}
+                    />
                     <div>
                       <p className="text-base font-semibold text-foreground">
                         {selectedOrder.user}
@@ -3646,6 +3660,27 @@ export function OrderQuickView({
                 )}
               </div>
 
+              {/* Mutual-cancellation appeal — counterparty Agree/Reject (self-hides if none) */}
+              {selectedOrder.id && (
+                <MutualCancelAppealBanner
+                  orderId={selectedOrder.id}
+                  viewerActorId={merchantId}
+                  variant="merchant"
+                  className="mx-5 mb-2"
+                  enabled={
+                    !["cancelled", "expired", "completed", "complete", "disputed"].includes(
+                      (selectedOrder.dbOrder?.status as string) || "",
+                    )
+                  }
+                  onResolved={() => onClose()}
+                  // Real mode: route the seller's "Release" through the normal
+                  // on-chain release flow (signs + completes); the appeal closes
+                  // server-side once the order completes.
+                  onReleaseRequest={() => { onConfirmPayment(selectedOrder.id).then(onClose); }}
+                  onOpenChat={() => { if (selectedOrder) onOpenChat(selectedOrder); }}
+                />
+              )}
+
               {/* Cancel Request Banner — shown when counterparty requested cancellation */}
               {(() => {
                 if (
@@ -3873,7 +3908,7 @@ export function OrderQuickView({
                     onCancelOrderWithoutEscrow(selectedOrder.id);
                     onClose();
                   }}
-                  className="w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all bg-[var(--color-error)]/10 hover:bg-[var(--color-error)]/20 border-[var(--color-error)]/30 text-[var(--color-error)] disabled:opacity-50"
+                  className="w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.12] text-[#f5f5f7] disabled:opacity-50"
                 >
                   {cancellingOrderId === selectedOrder.id ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -3991,8 +4026,12 @@ export function OrderQuickView({
                     : "bg-white/[0.06] hover:bg-white/[0.08] border-white/[0.12] hover:border-white/[0.12] text-[#f5f5f7]";
                   const PRIMARY_LOADING =
                     "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]/50 cursor-wait";
+                  // Cancel is the only action that reaches this secondary slot
+                  // (DISPUTE is filtered out above and surfaced as "Raise
+                  // Appeal"), so it gets the neutral treatment — destructive red
+                  // is reserved for disputes elsewhere.
                   const SECONDARY_STYLE =
-                    "bg-red-500/10 hover:bg-[var(--color-error)]/20 border-red-500/30 hover:border-[var(--color-error)]/40 text-red-400";
+                    "bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.12] text-[#f5f5f7]";
                   const DISABLED_STYLE =
                     "bg-foreground/[0.04] border-foreground/[0.06] text-foreground/40 cursor-not-allowed";
 
@@ -4020,11 +4059,7 @@ export function OrderQuickView({
                               whileTap={{ scale: 0.98 }}
                               disabled={loading}
                               onClick={() => ACTION_HANDLER[primary.type!]?.()}
-                              className={`${
-                                primary.type === "LOCK_ESCROW"
-                                  ? "flex-[2]"
-                                  : "w-full"
-                              } ${
+                              className={`w-full ${
                                 isActiveOrder ? "py-3 text-sm" : "py-3"
                               } rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all ${
                                 loading ? PRIMARY_LOADING : PRIMARY_STYLE
@@ -4040,25 +4075,11 @@ export function OrderQuickView({
                               {primaryLabel}
                             </motion.button>
                           );
-                          if (primary.type === "LOCK_ESCROW") {
-                            return (
-                              <div className="flex gap-3">
-                                <button
-                                  onClick={() => {
-                                    onCancelOrderWithoutEscrow(
-                                      selectedOrder.id,
-                                    );
-                                    onClose();
-                                  }}
-                                  disabled={loading}
-                                  className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] font-semibold text-sm disabled:opacity-50 transition-all"
-                                >
-                                  Cancel
-                                </button>
-                                {primaryBtn}
-                              </div>
-                            );
-                          }
+                          // After a merchant accepts, the order can no longer be
+                          // unilaterally cancelled — cancellation goes through the
+                          // appeal / mutual-cancel flow (Raise Appeal, rendered
+                          // below). So the Lock-Escrow CTA is full-width with no
+                          // paired Cancel button.
                           return primaryBtn;
                         })()
                       ) : primary.label &&
@@ -4131,7 +4152,7 @@ export function OrderQuickView({
                             "accepted",
                             "escrowed",
                             "payment_sent",
-                          ].includes(st);
+                          ].includes(st) && !qvAppealActive;
                           return (
                             <div className="flex gap-3">
                               {showAppeal && (

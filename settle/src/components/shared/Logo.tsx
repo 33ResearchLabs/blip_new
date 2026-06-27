@@ -51,7 +51,7 @@ export const Logo = memo(function Logo({
           style={{
             fontWeight: 600,
             letterSpacing: "-0.04em",
-            color: "#10b981",
+            color: onDark ? "#ffffff" : "#10b981",
             fontStyle: "italic",
           }}
           className="ml-1"

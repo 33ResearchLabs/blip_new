@@ -508,14 +508,26 @@ export const corridorMatchSchema = z.object({
 export type CorridorProviderInput = z.infer<typeof corridorProviderSchema>;
 export type CorridorMatchInput = z.infer<typeof corridorMatchSchema>;
 
-// Helper function to sanitize messages (basic XSS prevention)
+// Helper function to sanitize message content.
+//
+// Do NOT HTML-encode here. Message content is stored as-is, returned in JSON
+// API responses, and rendered as React text (which auto-escapes on output) —
+// it is never injected into raw HTML. The previous entity-encoding (' -> &#x27;,
+// / -> &#x2F;, etc.) double-escaped on render, so apostrophes, slashes and
+// quotes showed up as literal "&#x27;" / "&#x2F;" in the chat. Output escaping
+// is React's job; encoding at storage time corrupts the message.
+//
+// We still strip non-printable control characters (keeping tab/newline/CR),
+// which is a real sanitization that doesn't mangle what the user typed.
 function sanitizeMessage(input: string): string {
-  return input
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+  // Strip C0 control characters, keeping tab (9), newline (10) and CR (13).
+  let out = '';
+  for (const ch of input) {
+    const code = ch.charCodeAt(0);
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) continue;
+    out += ch;
+  }
+  return out;
 }
 
 // Type exports for use in handlers

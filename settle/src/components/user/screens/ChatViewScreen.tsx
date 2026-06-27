@@ -30,6 +30,7 @@ import { usePusherOptional } from "@/context/PusherContext";
 import { getOrderChannel } from "@/lib/pusher/channels";
 import { ORDER_EVENTS, CHAT_EVENTS } from "@/lib/pusher/events";
 import { formatLastSeen } from "./helpers";
+import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
 import type { Screen, Order } from "./types";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { RefObject } from "react";
@@ -154,6 +155,12 @@ export const ChatViewScreen = ({
 
   // Backend-controlled chat availability — the ONLY source of truth
   const { chatEnabled, chatReason, chatState } = useChatStatus(activeOrder.id);
+
+  // This user's trade role drives perspective-aware appeal system messages
+  // ("You raised an appeal" vs "The seller raised an appeal"). In the user app
+  // the viewer is always the order creator: sell → seller, buy → buyer.
+  const viewerTradeRole: "buyer" | "seller" =
+    String(activeOrder.type).toLowerCase() === "sell" ? "seller" : "buyer";
 
   // ── Typing indicator debounce (auto-stop after 3s) ──
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -736,7 +743,7 @@ export const ChatViewScreen = ({
               return (
                 <div key={msg.id} className="flex justify-center">
                   <div className="w-full max-w-[90%] rounded-2xl px-4 py-3 bg-surface-hover border border-border-strong">
-                    <p className="text-[13px] whitespace-pre-line leading-relaxed text-text-secondary">{msg.text}</p>
+                    <p className="text-[13px] whitespace-pre-line leading-relaxed text-text-secondary">{personalizeAppealMessage(msg.text, viewerTradeRole)}</p>
                     <p className="text-[10px] mt-1.5 text-text-tertiary">
                       {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </p>
@@ -768,22 +775,25 @@ export const ChatViewScreen = ({
                   ) : (
                     <p className="text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word">{msg.text}</p>
                   )}
+                  {/* Own messages: timestamp + ticks inherit the bubble's text
+                      color (white on the navy light-theme bubble, black on the
+                      white dark-theme bubble) so they're always legible. */}
                   <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
-                    <span className={`text-[10px] ${isMe ? 'text-black/45' : 'text-text-tertiary'}`}>
+                    <span className={`text-[10px] ${isMe ? 'opacity-90' : 'text-text-tertiary'}`}>
                       {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     {isMe && (
                       msg.status === 'sending' ? (
-                        <Clock className="w-3 h-3 text-text-tertiary" />
+                        <Clock className="w-3 h-3 opacity-70" />
                       ) : msg.status === 'read' || msg.isRead ? (
-                        // ✓✓ blue — counterparty has READ the message
-                        <CheckCheck className="w-3.5 h-3.5 text-info" />
+                        // ✓✓ — counterparty has READ the message (full opacity)
+                        <CheckCheck className="w-3.5 h-3.5" />
                       ) : msg.status === 'delivered' ? (
-                        // ✓✓ grey — message DELIVERED to counterparty's device
-                        <CheckCheck className="w-3.5 h-3.5 text-black/45" />
+                        // ✓✓ — message DELIVERED to counterparty's device
+                        <CheckCheck className="w-3.5 h-3.5 opacity-70" />
                       ) : (
                         // ✓ single — message SENT to server, not yet delivered
-                        <Check className="w-3 h-3 text-black/45" />
+                        <Check className="w-3 h-3 opacity-70" />
                       )
                     )}
                   </div>

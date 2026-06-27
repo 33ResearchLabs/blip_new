@@ -45,6 +45,7 @@ import type { Order, MerchantPaymentMethod } from "./types";
 import { formatCrypto, formatCount } from "@/lib/format";
 import { explorerUrl } from "@/lib/solana/networkLabel";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { PaymentConfirmSheet } from "@/components/user/PaymentConfirmSheet";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -129,7 +130,6 @@ export interface OrderPaymentScreenProps {
   onViewProfile: () => void;
   onNeedHelp: () => void;
   onMarkPaymentSent: () => void;
-  onCancel: () => void;
   onAppeal: () => void;
   onCopy: (key: string, value: string) => void;
   copiedField: string | null;
@@ -137,7 +137,10 @@ export interface OrderPaymentScreenProps {
   matchingPayMethods: MerchantPaymentMethod[];
   onChoosePayMethod: (pm: MerchantPaymentMethod) => void;
   isSubmitting: boolean;
-  isCancelling: boolean;
+  /** Active-appeal banner (rendered at the top of the content when an appeal is live). */
+  appealBanner?: React.ReactNode;
+  /** When an appeal is already open/proposed, hide the "Raise Appeal" entry. */
+  appealActive?: boolean;
 }
 
 export function OrderPaymentScreen({
@@ -150,7 +153,6 @@ export function OrderPaymentScreen({
   onViewProfile,
   onNeedHelp,
   onMarkPaymentSent,
-  onCancel,
   onAppeal,
   onCopy,
   copiedField,
@@ -158,7 +160,8 @@ export function OrderPaymentScreen({
   matchingPayMethods,
   onChoosePayMethod,
   isSubmitting,
-  isCancelling,
+  appealBanner,
+  appealActive,
 }: OrderPaymentScreenProps) {
   const dbStatus = String(order.dbStatus || order.status || "").toLowerCase();
   const escrowLocked = dbStatus === "escrowed" || dbStatus === "payment_pending";
@@ -183,6 +186,20 @@ export function OrderPaymentScreen({
   const fiatStr = `${sym}${formatCrypto(parseFloat(order.fiatAmount))}`;
   const rows = derivePaymentRows(order, displayId);
   const canPay = escrowLocked && !needsPayMethodPick && !isSubmitting;
+
+  // "I've Paid" confirmation. Marking payment sent is irreversible, so it's
+  // gated behind a checklist sheet. The sheet's `open` is *derived* — once the
+  // order leaves the escrow-locked phase (payment_sent) it auto-closes, so no
+  // effect is needed.
+  const [showPaidConfirm, setShowPaidConfirm] = useState(false);
+  const nameRow = rows.find((r) => /name/i.test(r.label));
+  const payDestination =
+    nameRow && nameRow.value && nameRow.value !== "—" ? nameRow.value : "the account shown above";
+  const paidChecklist = [
+    `I sent exactly ${fiatStr} — no more, no less`,
+    "I paid the account shown above",
+    "The payment is complete (not pending)",
+  ];
 
   return (
     <div className="bg-surface-base flex-1 min-h-0 overflow-y-auto scrollbar-hide">
@@ -213,6 +230,9 @@ export function OrderPaymentScreen({
       </div>
 
       <div className="px-5 pb-10 space-y-4">
+        {/* Active-appeal banner — shown when an appeal is open/proposed. */}
+        {appealBanner}
+
         {/* Accepted banner */}
         <motion.div
           initial={{ y: 12, opacity: 0 }}
@@ -384,27 +404,8 @@ export function OrderPaymentScreen({
                 </div>
               )}
 
-              {/* Appeal */}
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  {paymentSent ? (
-                    <p className="text-[13px] text-text-secondary">
-                      Seller has up to <span className="font-semibold text-text-primary tabular-nums">{fmtCountdown(remainingSec)}</span> to confirm receipt of your payment.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-[13px] font-medium text-text-primary">Need help?</p>
-                      <p className="text-[12px] text-text-tertiary">You can appeal if you face any issues.</p>
-                    </>
-                  )}
-                </div>
-                <button
-                  onClick={onAppeal}
-                  className="shrink-0 px-4 py-2 rounded-xl text-[13px] font-semibold text-error border border-error-border hover:bg-error-dim"
-                >
-                  Appeal
-                </button>
-              </div>
+              {/* "Need help? / Appeal" was here — moved out to its own card
+                  directly below the Payment details card (see below). */}
             </>
           )}
         </div>
@@ -481,15 +482,18 @@ export function OrderPaymentScreen({
                     <span className="text-[13px] text-text-secondary shrink-0">{row.label}</span>
                     <button
                       onClick={() => onCopy(row.copyKey, row.copyValue ?? row.value)}
-                      className="flex items-center gap-1.5 min-w-0 text-right"
+                      aria-label={`Copy ${row.label}`}
+                      className="flex items-center gap-1.5 min-w-0 text-right -my-1.5 -mr-2 py-1.5 pr-2 pl-1 rounded-lg active:bg-surface-hover"
                     >
                       <span className={`text-[14px] font-medium truncate ${row.accent ? "text-text-primary font-semibold" : "text-text-primary"} ${row.mono ? "font-mono" : ""}`}>
                         {row.value}
                       </span>
                       {copiedField === row.copyKey ? (
-                        <Check className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+                        <span className="inline-flex items-center gap-1 shrink-0 text-[11px] font-semibold text-text-secondary">
+                          <Check className="w-3.5 h-3.5" strokeWidth={3} /> Copied
+                        </span>
                       ) : (
-                        <Copy className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
+                        <Copy className="w-4 h-4 text-text-tertiary shrink-0" />
                       )}
                     </button>
                   </div>
@@ -511,6 +515,35 @@ export function OrderPaymentScreen({
             </>
           )}
         </div>
+
+        {/* Need help? / Appeal — its own card directly below the Payment
+            details card (a sibling in the space-y-4 stack, so the inter-card
+            spacing matches the rest). Only shown once funds are locked, which
+            preserves the original visibility. Single horizontal row: copy on
+            the left (truncates via min-w-0), Appeal pinned right and vertically
+            centred with the heading. */}
+        {fundsLocked && (
+          <div className={`rounded-2xl p-4 flex items-center justify-between gap-3 ${CARD}`}>
+            <div className="min-w-0">
+              {paymentSent ? (
+                <p className="text-[13px] text-text-secondary">
+                  Seller has up to <span className="font-semibold text-text-primary tabular-nums">{fmtCountdown(remainingSec)}</span> to confirm receipt of your payment.
+                </p>
+              ) : (
+                <>
+                  <p className="text-[13px] font-semibold text-text-primary">Need help?</p>
+                  <p className="text-[12px] text-text-tertiary">You can appeal if you face any issues.</p>
+                </>
+              )}
+            </div>
+            <button
+              onClick={onAppeal}
+              className="shrink-0 px-4 py-2 rounded-xl text-[13px] font-semibold text-error border border-error-border hover:bg-error-dim"
+            >
+              Appeal
+            </button>
+          </div>
+        )}
 
         {/* Merchant card */}
         <div className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}>
@@ -551,10 +584,18 @@ export function OrderPaymentScreen({
           </button>
           <button
             onClick={onOpenChat}
-            className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-surface-active"
+            className="relative w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-surface-active"
             aria-label="Chat with merchant"
           >
             <MessageCircle className="w-5 h-5 text-text-secondary" />
+            {/* Unread badge — this BUY accepted/escrow-pending screen never had
+                one, so incoming merchant messages didn't surface here even though
+                the count was already on the order. */}
+            {!!order.unreadCount && order.unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-accent text-accent-text text-[10px] font-semibold leading-4 text-center tabular-nums">
+                {order.unreadCount > 99 ? "99+" : order.unreadCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -602,7 +643,7 @@ export function OrderPaymentScreen({
           {escrowLocked && (
             <motion.button
               whileTap={{ scale: 0.98 }}
-              onClick={onMarkPaymentSent}
+              onClick={() => setShowPaidConfirm(true)}
               disabled={!canPay}
               className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-text-primary text-surface-base disabled:opacity-50 flex items-center justify-center gap-2"
             >
@@ -610,22 +651,23 @@ export function OrderPaymentScreen({
               {needsPayMethodPick ? "Select an account first" : "I have made the payment"}
             </motion.button>
           )}
-          {/* Cancel is offered ONLY before escrow is locked (accepted /
-              escrow_pending — nothing is at stake, so the buyer can back out
-              instantly and unilaterally). Once the seller has locked USDT
-              (escrowed / payment_pending / payment_sent) there is no cancel
-              button: the buyer raises an Appeal instead (rendered above when
-              fundsLocked), and any mutual cancellation is resolved there. */}
-          {!fundsLocked && (
-            <motion.button
-              whileTap={{ scale: 0.98 }}
-              onClick={onCancel}
-              disabled={isCancelling}
-              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-foreground/[0.05] text-foreground/70 border border-foreground/[0.08] disabled:opacity-50 flex items-center justify-center gap-2"
+          {/* No "Cancel Order" button here. This screen only renders once a
+              merchant has accepted the order, and per product the buyer can no
+              longer cancel after acceptance — the exits are Back (header),
+              Raise Appeal, and Need help. Cancel is only offered BEFORE a
+              merchant accepts (the matching phase). */}
+          {/* Raise Appeal — available from acceptance onward. Once escrow is
+              locked the "Need help?" card below the Payment details renders its
+              own inline Appeal, so this bottom button only shows in the pre-lock
+              (accepted / escrow_pending) state to avoid a duplicate. */}
+          {!fundsLocked && !appealActive && (
+            <button
+              onClick={onAppeal}
+              className="w-full py-3 rounded-2xl text-[14px] font-semibold text-error border border-error-border hover:bg-error-dim transition-colors flex items-center justify-center gap-2"
             >
-              {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
-              Cancel Order
-            </motion.button>
+              <AlertCircle className="w-4 h-4" />
+              Raise Appeal
+            </button>
           )}
           {/* Need help — always available support path (navigation only). */}
           <button
@@ -637,6 +679,20 @@ export function OrderPaymentScreen({
           </button>
         </div>
       </div>
+
+      {/* Irreversible-action guard for "I've paid". Open is derived — it auto-
+          closes when the order leaves the escrow-locked phase (success), and on
+          failure the parent's alert reports it while the sheet stays open to retry. */}
+      <PaymentConfirmSheet
+        open={showPaidConfirm && escrowLocked && !needsPayMethodPick}
+        amountLabel={fiatStr}
+        destination={payDestination}
+        checklist={paidChecklist}
+        confirmLabel={`Yes, I've sent ${fiatStr}`}
+        loading={isSubmitting}
+        onClose={() => setShowPaidConfirm(false)}
+        onConfirm={onMarkPaymentSent}
+      />
     </div>
   );
 }

@@ -24,6 +24,7 @@ import {
 import { copyToClipboard } from "@/lib/clipboard";
 import type { Screen } from "./types";
 import { BottomNav } from "./BottomNav";
+import { RewardsHeroBanner } from "./RewardsHeroBanner";
 
 // Established constants used across the user screens
 // (ProfileScreen.tsx, OrdersListScreen.tsx, OrderDetailScreen.tsx).
@@ -368,9 +369,9 @@ export const RewardsScreen = ({
 
   return (
     <div className="relative flex flex-col h-dvh overflow-hidden bg-surface-base">
-      {/* ── Header — big hero title + subtitle. No back chip: this is a
-              tab-style screen with the persistent BottomNav below, matching
-              the Notifications screen pattern. ── */}
+      {/* ── Header — big title + notification bell, OUTSIDE the cards. This is a
+              tab-style screen with the persistent BottomNav below, matching the
+              Notifications screen pattern. ── */}
       <header className="px-5 pt-4 pb-4 shrink-0">
         <div className="flex items-center justify-between">
           <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
@@ -397,6 +398,14 @@ export const RewardsScreen = ({
       {/* ── Scrollable body ── */}
       <div className="flex-1 px-5 pb-28 overflow-y-auto scrollbar-hide">
         <div className="mx-auto w-full max-w-[440px] md:max-w-[min(1100px,97vw)]">
+          {/* ── 0. Refer & Earn promo card ── */}
+          <RewardsHeroBanner
+            className="mt-4"
+            onPrimary={handleCopyLink}
+            secondaryLabel={onLearnMore ? "How it works" : null}
+            onSecondary={onLearnMore}
+          />
+
           {/* ── 1. Main referral card ── */}
           <motion.section
             initial={{ opacity: 0, y: 8 }}

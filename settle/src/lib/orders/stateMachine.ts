@@ -79,6 +79,7 @@ export const ALLOWED_TRANSITIONS: Record<OrderStatus, TransitionRule[]> = {
     { to: 'payment_pending', allowedActors: ['merchant'] }, // M2M: buyer signs to claim after accepting
     { to: 'payment_sent', allowedActors: ['merchant'] }, // For sell orders: merchant sends fiat after accepting (escrow already locked by user)
     { to: 'cancelled', allowedActors: ['user', 'merchant', 'system'] },
+    { to: 'disputed', allowedActors: ['system'] }, // System-only: rejected/timed-out mutual-cancel appeal escalates to dispute
     { to: 'expired', allowedActors: ['system'] },
   ],
   escrow_pending: [

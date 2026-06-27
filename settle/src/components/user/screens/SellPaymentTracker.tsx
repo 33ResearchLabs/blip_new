@@ -80,6 +80,10 @@ export interface SellPaymentTrackerProps {
   onConfirmReceived: () => void;
   onRaiseAppeal: () => void;
   isConfirming: boolean;
+  /** Active-appeal banner (rendered at the top of the content when an appeal is live). */
+  appealBanner?: React.ReactNode;
+  /** When an appeal is already open/proposed, hide the "Raise Appeal" entries. */
+  appealActive?: boolean;
 }
 
 export function SellPaymentTracker({
@@ -92,6 +96,8 @@ export function SellPaymentTracker({
   onConfirmReceived,
   onRaiseAppeal,
   isConfirming,
+  appealBanner,
+  appealActive,
 }: SellPaymentTrackerProps) {
   const [showOverview, setShowOverview] = useState(false);
   const dbStatus = String(order.dbStatus || order.status || "").toLowerCase();
@@ -131,8 +137,8 @@ export function SellPaymentTracker({
         title: "Merchant accepted your order!",
         sub: "Your order has been accepted by the merchant. Please wait for the buyer to complete the payment.",
         icon: ShieldCheck,
-        bg: "bg-success/15",
-        fg: "text-success",
+        bg: "bg-border-subtle",
+        fg: "text-text-secondary",
       };
 
   const nextSteps = [
@@ -184,6 +190,9 @@ export function SellPaymentTracker({
         </div>
 
         <div className="px-5 pb-10 space-y-4">
+          {/* Active-appeal banner — shown when an appeal is open/proposed. */}
+          {appealBanner}
+
           {/* Status banner */}
           <motion.div
             initial={{ y: 12, opacity: 0 }}
@@ -209,13 +218,13 @@ export function SellPaymentTracker({
                   {fmtCountdown(remainingSec)}
                 </div>
               )}
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/15">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-border-subtle">
                 <motion.span
-                  className="w-1.5 h-1.5 rounded-full bg-success"
+                  className="w-1.5 h-1.5 rounded-full bg-text-secondary"
                   animate={{ opacity: [1, 0.3, 1] }}
                   transition={{ duration: 1.4, repeat: Infinity }}
                 />
-                <span className="text-[11px] font-semibold text-success">LIVE</span>
+                <span className="text-[11px] font-semibold text-text-secondary">LIVE</span>
               </div>
             </div>
           </motion.div>
@@ -249,8 +258,8 @@ export function SellPaymentTracker({
             transition={{ delay: 0.05 }}
             className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
           >
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-success/15">
-              <ShieldCheck className="w-6 h-6 text-success" />
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
+              <ShieldCheck className="w-6 h-6 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">Escrow details</p>
@@ -263,7 +272,7 @@ export function SellPaymentTracker({
                 href={txHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[13px] font-semibold text-success shrink-0 self-start"
+                className="inline-flex items-center gap-1 text-[13px] font-semibold text-text-secondary shrink-0 self-start"
               >
                 View details <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -285,10 +294,10 @@ export function SellPaymentTracker({
                   <div className="flex flex-col items-center">
                     <div
                       className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
-                        step.active ? "bg-success/15" : "bg-surface-active"
+                        step.active ? "bg-accent" : "bg-surface-active"
                       }`}
                     >
-                      <step.icon className={`w-4 h-4 ${step.active ? "text-success" : "text-text-tertiary"}`} />
+                      <step.icon className={`w-4 h-4 ${step.active ? "text-accent-text" : "text-text-tertiary"}`} />
                     </div>
                     {!isLast && <div className="w-0.5 flex-1 min-h-[14px] bg-border-medium" />}
                   </div>
@@ -312,7 +321,7 @@ export function SellPaymentTracker({
               <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 bg-border-subtle relative">
                 <Store className="w-5 h-5 text-text-secondary" />
                 {merchantOnline && (
-                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-surface-card" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-accent border-2 border-surface-card" />
                 )}
               </div>
               <div className="min-w-0">
@@ -379,7 +388,7 @@ export function SellPaymentTracker({
               whileTap={{ scale: 0.98 }}
               onClick={onConfirmReceived}
               disabled={isConfirming}
-              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-success-dim text-success border border-success-border disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isConfirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
               {isConfirming ? "Releasing…" : "I have received the payment"}
@@ -394,13 +403,17 @@ export function SellPaymentTracker({
             </button>
           )}
 
-          <button
-            onClick={onRaiseAppeal}
-            className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-warning-dim text-warning border border-warning-border flex items-center justify-center gap-2"
-          >
-            <AlertTriangle className="w-4 h-4" />
-            Raise Appeal
-          </button>
+          {/* Hidden once an appeal is active — the banner above carries the
+              resolution actions, and a second appeal can't be raised. */}
+          {!appealActive && (
+            <button
+              onClick={onRaiseAppeal}
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-warning-dim text-warning border border-warning-border flex items-center justify-center gap-2"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Raise Appeal
+            </button>
+          )}
         </div>
       </div>
 

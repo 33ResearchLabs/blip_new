@@ -150,6 +150,13 @@ function formatTelegramMessage(eventType: string, payload: any): string {
       return `🚩 *Appeal Raised*\n\nOrder #${orderId}\n\nAn appeal was raised — ${issue}. Please open the order to review and respond.`;
     }
 
+    case 'APPEAL_PROPOSED': {
+      const what = payload.resolution === 'complete'
+        ? 'release the crypto to the buyer'
+        : 'cancel the order and refund the escrow';
+      return `🤝 *Resolution Proposed*\n\nOrder #${orderId}\n\nThe ${payload.proposedBy || 'other party'} proposed to ${what}. Please open the order to Accept or Reject.`;
+    }
+
     default:
       return `📦 *Order Update*\n\nOrder #${orderId}\nStatus: ${status}\n\nYour order has been updated.`;
   }

@@ -179,12 +179,30 @@ interface UseRealtimeChatOptions {
 interface CacheEntry { messages: ChatMessage[]; actorId: string; ts: number; }
 const _msgCache = new Map<string, CacheEntry>();
 const CACHE_TTL = 5 * 60_000; // 5 min
+// Max connected-state history re-fetch attempts before giving up on a window
+// (≈30s at the 3s poll cadence — covers slow prod cold-start token restores).
+const HISTORY_RECOVERY_MAX_ATTEMPTS = 10;
+
+// Back-compat: messages stored BEFORE the server stopped HTML-encoding content
+// (sanitizeMessage) hold entities like &#x27; (') and &#x2F; (/), which rendered
+// literally because React escapes on output (double-escape). Decode them for
+// display. New messages are stored raw, so this is a no-op for them. Safe: the
+// result is rendered as React text, which escapes output — no XSS reintroduced.
+function decodeMessageEntities(s: string | null | undefined): string {
+  if (!s) return '';
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, '/');
+}
 
 function _mapDbMsg(dbMsg: DbMessage, actorType: string, actorId: string): ChatMessage {
   const from = determineSender(dbMsg.sender_type, dbMsg.message_type, actorType, dbMsg.sender_id, actorId);
   return {
     id: dbMsg.id, from,
-    text: dbMsg.content,
+    text: decodeMessageEntities(dbMsg.content),
     timestamp: new Date(dbMsg.created_at),
     messageType: dbMsg.message_type,
     receiptData: dbMsg.receipt_data ?? null,
@@ -264,6 +282,16 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
 
   }, [actorType, actorId, pusher]);
   const subscribedChannelsRef = useRef<Map<string, boolean>>(new Map());
+  // Orders whose message history has been successfully fetched at least once.
+  // subscribeToOrder fires fetchMessages exactly once and never retries, so a
+  // failed cold-start fetch (racing the session-token restore on hard refresh)
+  // would otherwise leave the chat permanently empty. The polling effect uses
+  // this set to keep re-fetching any window whose history hasn't loaded yet —
+  // even while Pusher is connected — and idles once every window has loaded.
+  const historyLoadedRef = useRef<Set<string>>(new Set());
+  // Bounded recovery attempts per order so a window that never loads (e.g. a
+  // genuine 403) doesn't re-fetch forever on the connected-state poll.
+  const historyRecoveryAttemptsRef = useRef<Map<string, number>>(new Map());
   const typingTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const chatWindowsRef = useRef(chatWindows);
   chatWindowsRef.current = chatWindows;
@@ -344,7 +372,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       return {
         id: dbMsg.id,
         from,
-        text: dbMsg.content,
+        text: decodeMessageEntities(dbMsg.content),
         timestamp: new Date(dbMsg.created_at),
         messageType: dbMsg.message_type,
         receiptData: dbMsg.receipt_data ?? null,
@@ -389,7 +417,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       return {
         id: event.messageId,
         from,
-        text: event.content,
+        text: decodeMessageEntities(event.content),
         timestamp: new Date(event.createdAt),
         messageType: event.messageType,
         imageUrl: event.imageUrl,
@@ -424,6 +452,11 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         const data = await res.json();
 
         if (data.success && data.data) {
+          // History fetched (even if empty) — stop the recovery poll for this
+          // order. Only a real success marks it; a !res.ok / thrown failure
+          // above leaves it unmarked so the poll keeps retrying.
+          historyLoadedRef.current.add(orderId);
+
           const messages: ChatMessage[] = data.data.map((m: DbMessage) =>
             mapDbMessageToUI(m, actorType),
           );
@@ -704,7 +737,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       channel.bind(CHAT_EVENTS.MESSAGES_DELIVERED, handleMessagesDelivered);
       channel.bind(CHAT_EVENTS.MESSAGES_READ, handleMessagesRead);
 
-      // Fetch initial messages
+      // Fetch initial messages. Reset the recovery counter first so reopening
+      // a chat that previously exhausted its retries gets a fresh budget.
+      historyRecoveryAttemptsRef.current.delete(orderId);
       fetchMessages(orderId, chatId);
 
       // Subscribe to presence channel for online status
@@ -816,26 +851,45 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pusher]);
 
-  // Polling fallback: round-robin messages ONLY when Pusher is disconnected
-  // Instead of fetching ALL windows every tick, fetch ONE window per tick
+  // Message polling. Two modes:
+  //  • Pusher down → round-robin one window per tick (primary transport).
+  //  • Pusher up   → history-recovery only: re-fetch any window whose initial
+  //    history fetch failed, then idle. Live updates come over the channel.
   const isPusherConnected = pusher?.isConnected ?? false;
   const pollTickRef = useRef(0);
   useEffect(() => {
-    // Skip polling when Pusher is delivering messages in real-time
-    if (isPusherConnected) return;
-
     const interval = setInterval(() => {
       const windows = chatWindowsRef.current.filter(
         (w) => w.orderId && !w.minimized,
       );
       if (windows.length === 0) return;
-      // Round-robin: fetch one window per tick
-      const idx = pollTickRef.current % windows.length;
-      const w = windows[idx];
-      if (w.orderId) {
+
+      if (!isPusherConnected) {
+        // Pusher down: round-robin one window per tick as the primary
+        // message-delivery mechanism (picks up new messages too, not just
+        // the initial history).
+        const idx = pollTickRef.current % windows.length;
+        const w = windows[idx];
+        if (w.orderId) {
+          fetchMessagesRef.current(w.orderId, w.id);
+        }
+        pollTickRef.current++;
+        return;
+      }
+
+      // Pusher up: live messages arrive over the channel, so we don't poll for
+      // updates. But the one-shot fetchMessages() in subscribeToOrder can fail
+      // on a hard-refresh cold start (racing the session-token restore), and
+      // once the channel is flagged subscribed + live polling is off, the
+      // history would never load. Recover by re-fetching any visible window
+      // whose history hasn't loaded yet. This idles once all are loaded.
+      for (const w of windows) {
+        if (!w.orderId || historyLoadedRef.current.has(w.orderId)) continue;
+        const attempts = historyRecoveryAttemptsRef.current.get(w.orderId) ?? 0;
+        if (attempts >= HISTORY_RECOVERY_MAX_ATTEMPTS) continue;
+        historyRecoveryAttemptsRef.current.set(w.orderId, attempts + 1);
         fetchMessagesRef.current(w.orderId, w.id);
       }
-      pollTickRef.current++;
     }, 3000);
 
     return () => clearInterval(interval);

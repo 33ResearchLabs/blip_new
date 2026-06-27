@@ -18,7 +18,7 @@ import {
   CheckCircle2, Store, Settings, Menu, ExternalLink, Info,
   Share2, MoreHorizontal, MessageCircle, Trophy, HelpCircle,
   CircleCheck, Target, Award, UserPlus, TrendingUp, ArrowRight,
-  BadgeCheck, Sparkles, Rocket, Activity, Star, Sun, Moon,
+  BadgeCheck, Sparkles, Rocket, Activity, Star, Sun, Moon, Link2, ChevronDown,
 } from 'lucide-react';
 
 // Lucide ships the legacy bird-shaped Twitter glyph; X rebranded to the
@@ -302,7 +302,18 @@ export default function WaitlistDashboardPage() {
         actor={actor}
       />
 
-      <main id="dash-top" className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4 pb-24 md:pb-4 relative z-10 lg:min-h-[calc(100vh-64px)] lg:flex lg:flex-col">
+      <main id="dash-top" className={`max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4 ${isMerchant ? 'pb-20' : 'pb-4'} md:pb-4 relative z-10 lg:min-h-[calc(100vh-64px)] lg:flex lg:flex-col`}>
+        {/* Mobile-only app shell — Founding Merchant hero + Your Overview +
+            Your Journey, stacked above the standard cards. Hidden on lg+
+            where the full grid layout takes over. No bottom tab bar. */}
+        <MobileWaitlistHeader
+          me={me}
+          blipPoints={blipPoints}
+          questsCompleted={questsCompleted}
+          referralCount={referralCount}
+          isMerchant={isMerchant}
+        />
+
         {isMerchant ? (
           <MerchantLayout
             me={me}
@@ -424,6 +435,290 @@ export default function WaitlistDashboardPage() {
   );
 }
 
+// ── Mobile-only header — reproduces the Blip Market mobile app shell:
+// a dark "Founding Merchant / Member" hero, a 3-up "Your Overview" stat
+// strip, and a "Your Journey" step timeline. Rendered with lg:hidden so
+// it only appears on phones/tablets and never duplicates the desktop
+// grid. The bottom tab bar from the mockup is intentionally omitted.
+function MobileWaitlistHeader({
+  me, blipPoints, questsCompleted, referralCount, isMerchant,
+}: {
+  me: WaitlistMe;
+  blipPoints: number;
+  questsCompleted: number;
+  referralCount: number;
+  isMerchant: boolean;
+}) {
+  const t = useThemeTokens();
+  // Collapsible "Your Journey" — the chevron after the step count toggles
+  // the timeline open/closed (mobile-only card, defaults to open).
+  const [journeyOpen, setJourneyOpen] = useState(true);
+
+  // Step timeline — mirror ProgressStepsCard's source logic exactly so the
+  // mobile "Your Journey" and the desktop "Your Progress & Steps" can never
+  // disagree about what's complete.
+  const hasVerified = (type: TaskType) => me.tasks.some((tk) => tk.task_type === type && tk.status === 'VERIFIED');
+  const allSocialDone = hasVerified('TWITTER') && hasVerified('TELEGRAM') && hasVerified('CUSTOM');
+  const onboardDone = hasVerified('ONBOARD_FORM');
+  const referredEnough = referralCount >= 3;
+  const betaState = me.beta_request?.status ?? null;
+
+  const rawSteps: Array<{ id: number; title: string; desc: string; done: boolean; badge?: string }> = [
+    { id: 1, title: 'Sign Up', desc: 'Welcome to Blip waitlist.', done: true },
+    { id: 2, title: 'Complete Community Quests', desc: 'Do social quests and earn points.', done: allSocialDone },
+    {
+      id: 3,
+      title: isMerchant ? 'Invite 3 Merchants' : 'Refer 3 Friends',
+      desc: isMerchant ? 'Refer merchants and earn 1,000 pts each.' : 'Refer friends and earn points each.',
+      done: referredEnough,
+      badge: `${Math.min(referralCount, 3)}/3`,
+    },
+    ...(isMerchant
+      ? [
+          { id: 4, title: 'Join Merchant Onboard Program', desc: 'Submit the Google Form and earn 500 pts.', done: onboardDone },
+          { id: 5, title: 'Request P2P Beta Access', desc: 'Get early access to the Blip P2P App.', done: betaState === 'approved' },
+        ]
+      : []),
+  ];
+
+  let firstUnfinished = false;
+  const steps = rawSteps.map((s) => {
+    let status: 'done' | 'active' | 'locked';
+    if (s.done) status = 'done';
+    else if (!firstUnfinished) { status = 'active'; firstUnfinished = true; }
+    else status = 'locked';
+    return { ...s, status };
+  });
+  const completedCount = steps.filter((s) => s.status === 'done').length;
+
+  const eyebrow = isMerchant ? 'Founding Merchant Program' : 'Founding Member Program';
+  const headlineLead = isMerchant ? 'Become a Founding Merchant on ' : 'Join the Founding Members of ';
+  const headlineSub = isMerchant
+    ? 'Join early. Earn BLIP points. Build reputation. Get beta access.'
+    : 'Join early. Earn BLIP points. Climb the leaderboard. Get beta access.';
+
+  const connectorColor = t.d ? 'bg-white/10' : 'bg-black/10';
+  const checkBg = t.d ? 'bg-white' : 'bg-black';
+  const checkText = t.d ? 'text-black' : 'text-white';
+
+  return (
+    <div className="lg:hidden mb-10">
+      {/* Dark full-bleed band — continues the navbar's black behind the hero
+          and extends below it so the Overview card can overlap, creating the
+          premium layered effect from the mockup. */}
+      <div
+        className="-mx-4 md:-mx-6 -mt-3 md:-mt-4 px-4 md:px-6 pt-3 md:pt-4 pb-32"
+        style={{ background: '#000000' }}
+      >
+      {/* Founding Merchant hero — premium-dark brand card with a soft orange
+          glow, regardless of the page theme. */}
+      <div
+        className="rounded-[26px] overflow-hidden relative"
+        style={{
+          background: '#070707',
+          border: '1px solid rgba(255,255,255,0.07)',
+        }}
+      >
+        <div className="relative flex items-center min-h-[272px]">
+          <div className="flex-1 min-w-0 p-7 pr-1 flex flex-col justify-center gap-4">
+            {/* <span
+              className="inline-flex w-fit items-center px-3.5 py-1.5 rounded-full text-[12px] font-semibold tracking-tight"
+              style={{ background: '#ffffff', color: ACCENT }}
+            >
+              {eyebrow}
+            </span> */}
+            <h2 className="text-[31px] font-bold leading-[1.08] tracking-[-0.015em] text-white">
+              {headlineLead}
+              <span className="italic" style={{ color: ACCENT }}>Blip Market.</span>
+            </h2>
+            <p className="text-[13.5px] text-white/55 leading-[1.55] max-w-[15rem]">
+              {headlineSub}
+            </p>
+          </div>
+          <div className="relative w-[42%] max-w-[180px] shrink-0 flex items-center justify-center pr-3">
+            <BlipMarketStall className="w-full h-auto" />
+          </div>
+        </div>
+      </div>
+      </div>
+
+      {/* Your Overview — pulled up to overlap the dark band above (top sits on
+          the dark area, the rest extends onto the light page background). */}
+      <div className={`relative z-10 -mt-24 ${t.surface} border ${t.border} ${t.cardShadow} rounded-[22px] p-5 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.22)]`}>
+        <h3 className={`text-[19px] font-bold ${t.txt} tracking-tight mb-4`}>Your Overview</h3>
+        <div className="grid grid-cols-3 gap-2">
+          <MobileOverviewStat icon={<Target className={`w-4 h-4 ${t.txt}`} strokeWidth={2} />} value={blipPoints} label="BLIP Points" />
+          <MobileOverviewStat icon={<BadgeCheck className={`w-4 h-4 ${t.txt}`} strokeWidth={2} />} value={questsCompleted} label="Completed Quests"  />
+          <MobileOverviewStat icon={<UsersIcon className={`w-4 h-4 ${t.txt}`} strokeWidth={2} />} value={referralCount} label="Referrals"  />
+        </div>
+      </div>
+
+      {/* Your Journey — step timeline. */}
+      <div className={`mt-10 ${t.surface} border ${t.border} ${t.cardShadow} rounded-[22px] p-5`}>
+        <button
+          type="button"
+          onClick={() => setJourneyOpen((v) => !v)}
+          aria-expanded={journeyOpen}
+          aria-controls="journey-steps"
+          aria-label={journeyOpen ? 'Hide steps' : 'Show steps'}
+          className={`w-full flex items-center justify-between gap-2 active:opacity-70 transition ${journeyOpen ? 'mb-4' : 'mb-0'}`}
+        >
+          <h3 className={`text-[19px] font-bold ${t.txt} tracking-tight`}>Your Journey</h3>
+          <ChevronDown className={`w-5 h-5 shrink-0 ${t.muted} transition-transform duration-200 ${journeyOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {journeyOpen && (
+        <div id="journey-steps">
+          <p className={`text-[12px] font-medium ${t.muted} mb-4`}>
+            {completedCount} of {steps.length} steps completed
+          </p>
+          <div className="space-y-5">
+          {steps.map((step, i) => {
+            const isLast = i === steps.length - 1;
+            const isDone = step.status === 'done';
+            const isActive = step.status === 'active';
+            return (
+              <div key={step.id} className="relative flex items-start gap-4">
+                {!isLast && (
+                  <div className={`absolute left-[13px] top-8 h-[calc(100%+4px)] w-px ${connectorColor}`} />
+                )}
+                <div className="shrink-0">
+                  {isDone ? (
+                    <div className={`w-7 h-7 rounded-full ${checkBg} flex items-center justify-center`}>
+                      <Check className={`w-[14px] h-[14px] ${checkText}`} strokeWidth={3} />
+                    </div>
+                  ) : isActive ? (
+                    <div className="relative w-7 h-7">
+                      <svg viewBox="0 0 28 28" className="w-7 h-7 -rotate-90">
+                        <circle cx="14" cy="14" r="12" fill="none" stroke="rgba(204,120,92,0.22)" strokeWidth="2.5" />
+                        <circle
+                          cx="14" cy="14" r="12" fill="none" stroke={ACCENT} strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeDasharray={`${0.34 * 2 * Math.PI * 12} ${2 * Math.PI * 12}`}
+                        />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center">
+                        <span className="w-[7px] h-[7px] rounded-full" style={{ background: ACCENT }} />
+                      </span>
+                    </div>
+                  ) : (
+                    <div className={`w-7 h-7 rounded-full border ${t.border} flex items-center justify-center`}>
+                      <span className={`text-[11px] font-semibold ${t.sub} tabular-nums`}>
+                        {step.id}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 pt-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={`text-[14.5px] font-semibold ${t.txt} tracking-tight`}>{step.title}</p>
+                    {step.badge && !isDone && (
+                      <span className={`text-[11px] font-semibold ${t.muted} border ${t.border} rounded-full px-2.5 py-0.5 tabular-nums shrink-0`}>
+                        {step.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p className={`text-[12.5px] ${t.muted} leading-snug mt-1`}>{step.desc}</p>
+                </div>
+              </div>
+            );
+          })}
+          </div>
+        </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Single stat cell inside the mobile "Your Overview" strip. Icon-on-top,
+// vertically centred, generous height to match the reference proportions.
+function MobileOverviewStat({
+  icon, value, label, hint,
+}: { icon: React.ReactNode; value: number; label: string; hint?: string }) {
+  const t = useThemeTokens();
+  const fill = t.d ? 'bg-[rgba(255,255,255,0.03)]' : 'bg-[rgba(0,0,0,0.015)]';
+  return (
+    <div className={`flex flex-col items-center text-center gap-2 px-1.5 py-5 ${fill} border ${t.border} rounded-2xl min-w-0`}>
+      <div className="h-4 flex items-center justify-center">{icon}</div>
+      <p className={`text-[18px] font-bold ${t.txt} leading-none tabular-nums tracking-tight whitespace-nowrap`}>{formatCount(value)}</p>
+      <div className="space-y-0.5">
+        <p className={`text-[10.5px] font-semibold ${t.txt} leading-tight`}>{label}</p>
+        {hint && <p className="text-[10.5px] font-semibold leading-tight" style={{ color: ACCENT }}>{hint}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ── BlipMarketStall — inline-SVG storefront illustration for the mobile
+// hero. Orange-themed 3D-style market stall with an awning, a glowing
+// counter window, a "BLIP" coin and a soft glow, standing in for a raster
+// 3D render (drop a real asset in /public and swap to <img> if available).
+function BlipMarketStall({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 200 200" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden role="img">
+      <defs>
+        <linearGradient id="bmRoof" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#f7a64e" />
+          <stop offset="1" stopColor="#cf6a37" />
+        </linearGradient>
+        <linearGradient id="bmBody" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#7e3417" />
+          <stop offset="1" stopColor="#2c1209" />
+        </linearGradient>
+        <linearGradient id="bmCoin" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffd27a" />
+          <stop offset="1" stopColor="#d98a32" />
+        </linearGradient>
+        <radialGradient id="bmWindow" cx="0.5" cy="1" r="0.9">
+          <stop offset="0" stopColor="#ffb155" stopOpacity="0.55" />
+          <stop offset="1" stopColor="#ffb155" stopOpacity="0" />
+        </radialGradient>
+        <clipPath id="bmRoofClip">
+          <path d="M44 88 L60 54 H140 L156 88 Z" />
+        </clipPath>
+      </defs>
+
+      {/* ground shadow */}
+      <ellipse cx="100" cy="172" rx="58" ry="10" fill="#1c0c06" opacity="0.7" />
+
+      {/* posts */}
+      <rect x="53" y="86" width="7" height="84" rx="3" fill="#5e3019" />
+      <rect x="140" y="86" width="7" height="84" rx="3" fill="#5e3019" />
+
+      {/* stall body */}
+      <rect x="57" y="96" width="86" height="72" rx="7" fill="url(#bmBody)" />
+      {/* counter window */}
+      <rect x="71" y="106" width="58" height="44" rx="6" fill="#150702" />
+      <rect x="71" y="118" width="58" height="32" rx="6" fill="url(#bmWindow)" />
+      {/* counter ledge */}
+      <rect x="64" y="150" width="72" height="9" rx="4" fill="#6e3318" />
+
+      {/* awning */}
+      <g clipPath="url(#bmRoofClip)">
+        <rect x="44" y="54" width="112" height="34" fill="url(#bmRoof)" />
+        {[52, 70, 88, 106, 124, 142].map((x) => (
+          <rect key={x} x={x} y="54" width="9" height="34" fill="#bb592c" opacity="0.55" />
+        ))}
+      </g>
+      {/* scalloped valance */}
+      {[52, 70, 88, 106, 124, 142].map((cx) => (
+        <circle key={cx} cx={cx} cy="88" r="7" fill="url(#bmRoof)" />
+      ))}
+      {/* ridge highlight */}
+      <path d="M44 88 L60 54 H140 L156 88" fill="none" stroke="#ffd9a8" strokeWidth="1.5" opacity="0.5" strokeLinejoin="round" />
+
+      {/* BLIP coin */}
+      <ellipse cx="98" cy="152" rx="21" ry="21" fill="url(#bmCoin)" stroke="#b9701f" strokeWidth="2" />
+      <ellipse cx="98" cy="152" rx="15" ry="15" fill="none" stroke="#ffe7b8" strokeWidth="1.5" opacity="0.6" />
+      <text x="98" y="157" textAnchor="middle" fontSize="11.5" fontWeight="700" fill="#7a3e0a" fontFamily="ui-sans-serif, system-ui, sans-serif">BLIP</text>
+
+      {/* sparkles */}
+      <path d="M158 60 l2.4 5.6 5.6 2.4 -5.6 2.4 -2.4 5.6 -2.4 -5.6 -5.6 -2.4 5.6 -2.4 z" fill="#ffd27a" opacity="0.85" />
+      <path d="M150 92 l1.6 3.6 3.6 1.6 -3.6 1.6 -1.6 3.6 -1.6 -3.6 -3.6 -1.6 3.6 -1.6 z" fill="#ffba62" opacity="0.7" />
+    </svg>
+  );
+}
+
 // ── Layout: merchant — 7/5 split with sub-cols on the right (mirrors
 // MerchantDashboard.tsx). The right column splits into A (Progress +
 // Leaderboard) and B (Your Progress & Steps + P2P banner).
@@ -468,8 +763,21 @@ function MerchantLayout(props: {
 
   return (
     <>
-      {/* Top row: Hero (6) | Referral Code (3) | Real-Time Activity (3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 lg:items-stretch">
+      {/* Top row: Hero (6) | Referral Code (3) | Real-Time Activity (3).
+          On mobile, Hero + Referral Code collapse into MobileReferralCard. */}
+      <MobileReferralCard
+        referralCode={referralCode}
+        referralLink={referralLink}
+        referralUnit={referralUnit}
+        copied={copied}
+        copiedLink={copiedLink}
+        onCopyCode={onCopyCode}
+        onCopyLink={onCopyLink}
+        onOpenReferral={onOpenReferral}
+        onOpenHow={onOpenHow}
+        isMerchant
+      />
+      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         <div className="lg:col-span-6">
           <HeroCard
             referralUnit={referralUnit}
@@ -490,18 +798,18 @@ function MerchantLayout(props: {
             isMerchant
           />
         </div>
-        <div className="lg:col-span-3">
+        <div className="hidden lg:block lg:col-span-3">
           <RealTimeActivityCard leaderboard={leaderboard} />
         </div>
       </div>
 
       {/* Below the top row: LEFT (Onboard + Stats + Quests + P2P)
           | MIDDLE (Progress + Leaderboard) | RIGHT (Steps) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 lg:items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         {/* LEFT COLUMN */}
-        <div className="lg:col-span-6 flex flex-col gap-3">
+        <div className="lg:col-span-6 flex flex-col gap-10 lg:gap-3">
           {/* Merchant Onboarding CTA */}
-          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 md:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${onboardDone ? 'opacity-70' : ''}`}>
+          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${onboardDone ? 'opacity-70' : ''}`}>
             <div className="flex items-center gap-3.5 min-w-0">
               <div className={`w-11 h-11 rounded-xl ${t.inputBg} border ${t.border} flex items-center justify-center shrink-0`}>
                 <Store className={`w-[18px] h-[18px] ${t.txt}`} strokeWidth={2} />
@@ -538,8 +846,9 @@ function MerchantLayout(props: {
             )}
           </div>
 
-          {/* Your Referral Stats */}
-          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 md:p-5`}>
+          {/* Your Referral Stats — hidden on mobile (the mobile "Your
+              Overview" card above already shows these figures). */}
+          <div className={`hidden lg:block ${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 md:p-5`}>
             <div className="flex items-center gap-2 mb-3">
               <div className="w-1.5 h-1.5 rounded-full" style={{ background: ACCENT }} />
               <span className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
@@ -584,8 +893,16 @@ function MerchantLayout(props: {
             </div>
           </div>
 
-          {/* P2P App Test banner */}
-          <P2PTestBanner
+          {/* Beta-access section below the quests. Desktop keeps the compact
+              P2P banner; mobile gets the richer Merchant Beta Program card. */}
+          <div className="hidden lg:block">
+            <P2PTestBanner
+              betaRequest={me.beta_request}
+              socialQuestsDone={socialQuestsDone}
+              onSendRequest={onOpenBeta}
+            />
+          </div>
+          <MerchantBetaProgramCard
             betaRequest={me.beta_request}
             socialQuestsDone={socialQuestsDone}
             onSendRequest={onOpenBeta}
@@ -597,13 +914,14 @@ function MerchantLayout(props: {
         </div>
 
         {/* MIDDLE COLUMN */}
-        <div className="lg:col-span-3 flex flex-col gap-3 min-w-0">
+        <div className="lg:col-span-3 flex flex-col gap-10 lg:gap-3 min-w-0">
           <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} compact />
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div className="lg:col-span-3 flex flex-col gap-3 min-w-0">
+        {/* RIGHT COLUMN — hidden on mobile (the mobile "Your Journey" card
+            above already covers the step timeline). */}
+        <div className="hidden lg:flex lg:col-span-3 flex-col gap-3 min-w-0">
           <ProgressStepsCard
             me={props.me}
             referralCount={referralCount}
@@ -648,8 +966,21 @@ function UserLayout(props: {
 
   return (
     <>
-      {/* Top row: Hero (6) | Referral Code (3) | Real-Time Activity (3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 lg:items-stretch">
+      {/* Top row: Hero (6) | Referral Code (3) | Real-Time Activity (3).
+          On mobile, Hero + Referral Code collapse into MobileReferralCard. */}
+      <MobileReferralCard
+        referralCode={referralCode}
+        referralLink={referralLink}
+        referralUnit={referralUnit}
+        copied={copied}
+        copiedLink={copiedLink}
+        onCopyCode={onCopyCode}
+        onCopyLink={onCopyLink}
+        onOpenReferral={onOpenReferral}
+        onOpenHow={onOpenHow}
+        isMerchant={false}
+      />
+      <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         <div className="lg:col-span-6">
           <HeroCard
             referralUnit={referralUnit}
@@ -670,14 +1001,14 @@ function UserLayout(props: {
             isMerchant={false}
           />
         </div>
-        <div className="lg:col-span-3">
+        <div className="hidden lg:block lg:col-span-3">
           <RealTimeActivityCard leaderboard={leaderboard} />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mb-3 lg:items-stretch">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
         {/* LEFT — Quests + Invite */}
-        <div className="lg:col-span-8 flex flex-col gap-3">
+        <div className="lg:col-span-6 flex flex-col gap-10 lg:gap-3">
           <div id="social-quests">
             <div className="mb-4">
               <div className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub} mb-1`}>
@@ -722,7 +1053,7 @@ function UserLayout(props: {
             </div>
             <div className="flex items-center gap-4 w-full md:w-auto">
               <div>
-                <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${t.sub}`}>Your Referrals</p>
+                <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${t.sub}`}>Your Referrals </p>
                 <p className={`text-lg font-semibold ${t.txt} leading-tight`}>{referralCount}</p>
               </div>
               <button
@@ -739,13 +1070,163 @@ function UserLayout(props: {
           )}
         </div>
 
-        {/* RIGHT — Progress + Leaderboard */}
-        <div className="lg:col-span-4 flex flex-col gap-3">
+        {/* MIDDLE — Progress + Leaderboard */}
+        <div className="lg:col-span-3 flex flex-col gap-10 lg:gap-3 min-w-0">
           <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} />
         </div>
+
+        {/* RIGHT — Your Progress & Steps (desktop only; mobile uses "Your
+            Journey"). Placed beside the progress column to match the
+            merchant dashboard. */}
+        <div className="hidden lg:flex lg:col-span-3 flex-col gap-3 min-w-0">
+          <ProgressStepsCard me={me} referralCount={referralCount} isMerchant={false} />
+        </div>
       </div>
     </>
+  );
+}
+
+// ── Mobile referral card — merges the Hero + Referral-Code surfaces into
+// a single premium, centred card (lg:hidden). On lg+ the original
+// HeroCard + ReferralCodeCard split layout takes over. Pure presentation:
+// every action reuses the same handlers as the desktop cards.
+function MobileReferralCard({
+  referralCode, referralLink, referralUnit, copied, copiedLink,
+  onCopyCode, onCopyLink, onOpenReferral, onOpenHow, isMerchant,
+}: {
+  referralCode: string; referralLink: string; referralUnit: number;
+  copied: boolean; copiedLink: boolean;
+  onCopyCode: () => void; onCopyLink: () => void;
+  onOpenReferral: () => void; onOpenHow: () => void; isMerchant: boolean;
+}) {
+  const t = useThemeTokens();
+  const tweetText = `Join Blip Market with my referral code ${referralCode}! ${referralLink}`;
+  const codeTint = t.d ? 'rgba(204,120,92,0.07)' : 'rgba(204,120,92,0.045)';
+
+  return (
+    <div className={`lg:hidden ${t.surface} border ${t.border} ${t.cardShadow} rounded-[24px] p-5 shadow-sm mb-10`}>
+      {/* Header — circular icon, title, description (centred) */}
+      <div className="flex flex-col items-center text-center gap-3.5">
+        <div
+          className="w-14 h-14 rounded-full flex items-center justify-center"
+          style={{ background: 'rgba(204,120,92,0.12)' }}
+        >
+          <UserPlus className="w-6 h-6" style={{ color: ACCENT }} />
+        </div>
+        <h2 className="text-[30px] font-bold leading-[1.08] tracking-tight">
+          <span className={t.txt}>Refer Friends. </span>
+          <span className="italic" style={{ color: ACCENT }}>Earn More.</span>
+        </h2>
+        <p className={`text-[14px] ${t.muted} leading-relaxed max-w-[21rem]`}>
+          Invite your friends to Blip Market and earn{' '}
+          <span className={`font-semibold ${t.txt}`}>{formatCount(referralUnit)} pts</span> for each
+          successful referral. There&apos;s no limit to how much you can earn.
+        </p>
+      </div>
+
+      {/* Action buttons — equal-width, side-by-side */}
+      <div className="grid grid-cols-2 gap-3 mt-6">
+        <button
+          onClick={onOpenReferral}
+          className={`${t.accentBg} ${t.accentText} h-12 rounded-xl text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center justify-center gap-2 active:scale-[0.98] transition whitespace-nowrap`}
+        >
+          <Share2 className="w-3.5 h-3.5 shrink-0" />
+          Share Code
+        </button>
+        <button
+          onClick={onOpenHow}
+          className={`${t.inputBg} border ${t.border} ${t.txt} h-12 rounded-xl text-[11px] font-semibold uppercase tracking-[0.08em] flex items-center justify-center gap-2 ${t.hov} transition whitespace-nowrap`}
+        >
+          <Info className="w-3.5 h-3.5 shrink-0" />
+          How It Works
+        </button>
+      </div>
+
+      {/* Divider */}
+      <div className={`border-t ${t.divider} my-6`} />
+
+      {/* Referral code */}
+      <span className={`block text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub} mb-3`}>
+        Your Referral Code
+      </span>
+      <div
+        className="flex items-center justify-between rounded-xl px-4 py-4 border"
+        style={{ borderColor: `${ACCENT}55`, background: codeTint }}
+      >
+        <span className={`text-[24px] font-bold ${t.txt} tracking-[0.06em] truncate`}>
+          {referralCode || '—'}
+        </span>
+        <button
+          onClick={onCopyCode}
+          className="p-2.5 rounded-lg shrink-0 ml-2"
+          style={{ background: 'rgba(204,120,92,0.12)' }}
+          aria-label="Copy referral code"
+        >
+          {copied
+            ? <Check className="w-[18px] h-[18px] text-emerald-500" />
+            : <Copy className="w-[18px] h-[18px]" style={{ color: ACCENT }} />}
+        </button>
+      </div>
+      <p className={`text-[13px] ${t.muted} leading-relaxed mt-3`}>
+        {isMerchant
+          ? <>Share your code or link and earn <span className={`font-semibold ${t.txt}`}>{formatCount(referralUnit)} pts</span> for each successful referral.</>
+          : <>Earn <span className={`font-semibold ${t.txt}`}>{formatCount(USER_BLIP_POINTS.REFERRAL)} pts</span> per user signup or <span className={`font-semibold ${t.txt}`}>{formatCount(MERCHANT_BLIP_POINTS.REFERRAL)} pts</span> per merchant signup.</>}
+      </p>
+
+      {/* Or share your link */}
+      <div className="flex items-center gap-3 my-6">
+        <div className={`h-px flex-1 border-t ${t.divider}`} />
+        <span className={`text-[10px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
+          Or share your link
+        </span>
+        <div className={`h-px flex-1 border-t ${t.divider}`} />
+      </div>
+
+      {/* Referral link */}
+      <div className={`flex items-center gap-2.5 ${t.inputBg} border ${t.border} rounded-xl px-4 py-3.5`}>
+        <Link2 className={`w-4 h-4 ${t.muted} shrink-0`} />
+        <span className={`text-[12.5px] ${t.muted} truncate flex-1`}>{referralLink || '—'}</span>
+        <button
+          onClick={onCopyLink}
+          className={`p-1.5 rounded ${t.hov} transition shrink-0`}
+          aria-label="Copy referral link"
+        >
+          {copiedLink
+            ? <Check className="w-4 h-4 text-emerald-500" />
+            : <Copy className={`w-4 h-4 ${t.muted}`} />}
+        </button>
+      </div>
+
+      {/* Social share buttons */}
+      <div className="grid grid-cols-3 gap-2.5 mt-4">
+        <a
+          href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${t.inputBg} border ${t.border} rounded-xl py-3 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
+        >
+          <XLogo className="w-3.5 h-3.5" />
+          <span>Twitter</span>
+        </a>
+        <a
+          href={`https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent('Join Blip Market with my referral!')}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${t.inputBg} border ${t.border} rounded-xl py-3 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
+        >
+          <Send className="w-3.5 h-3.5" />
+          <span>Telegram</span>
+        </a>
+        <button
+          onClick={onOpenReferral}
+          className={`${t.inputBg} border ${t.border} rounded-xl py-3 text-[12px] font-semibold ${t.txt} flex items-center justify-center gap-2 ${t.hov} transition`}
+        >
+          <MoreHorizontal className="w-3.5 h-3.5" />
+          <span>More</span>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -768,10 +1249,10 @@ function HeroCard({
           <h2 className="text-[26px] md:text-[31px] font-semibold leading-[1.15] tracking-tight">
             <span className={t.txt}>Refer Friends.</span>
             <br />
-            <span style={{ color: ACCENT }}>Earn More.</span>
+            <span className="italic" style={{ color: ACCENT }}>Earn More.</span>
           </h2>
           <p className={`text-[13.5px] ${t.muted} max-w-md leading-[1.7]`}>
-            Invite your friends to Blip Market and earn{' '}
+            Invite your friends to Blip Market and earn  {' '}
             <span className={`font-semibold ${t.txt}`}>{formatCount(referralUnit)} pts</span> for each
             successful referral. There&apos;s no limit to how much you can earn.
           </p>
@@ -994,8 +1475,7 @@ function RealTimeActivityCard({
               <div className="text-right shrink-0 ml-3 flex flex-col items-end gap-0.5">
                 {a.points !== null && (
                   <span
-                    className="text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full tabular-nums"
-                    style={{ background: 'rgba(204,120,92,0.10)', color: ACCENT }}
+                    className={`text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full tabular-nums ${t.inputBg} border ${t.border} ${t.txt}`}
                   >
                     +{a.points.toLocaleString('en-US')} pts
                   </span>
@@ -1178,7 +1658,7 @@ function ProgressGauge({ blipPoints, onShowHistory }: { blipPoints: number; onSh
         </button>
       </div>
 
-      <ReputationCoinBadge variant="card" className="my-2" />
+      <ReputationCoinBadge hideRep variant="card" className="my-2" />
 
       <div className={`pt-3 border-t ${t.divider} space-y-2.5`}>
         {milestones.map((m) => {
@@ -1195,7 +1675,7 @@ function ProgressGauge({ blipPoints, onShowHistory }: { blipPoints: number; onSh
                   }}
                 />
                 <span className={`text-[12.5px] font-semibold ${achieved ? t.txt : t.muted} tabular-nums tracking-tight`}>
-                  {formatCount(m)} pts
+                  {formatCount(m)} coins
                 </span>
               </div>
               {achieved && <Check className={`w-3.5 h-3.5 ${t.txt}`} strokeWidth={2.5} />}
@@ -1348,7 +1828,8 @@ function ProgressStepsCard({
 }
 
 // ── Merchant P2P beta banner. Source: MerchantDashboard.tsx 1704–1755.
-// Button state mirrors the actor's latest BetaRequest row.
+// Button state mirrors the actor's latest BetaRequest row. Shown on
+// desktop (lg+) — mobile uses the richer MerchantBetaProgramCard below.
 function P2PTestBanner({
   betaRequest, socialQuestsDone, onSendRequest,
 }: {
@@ -1380,7 +1861,7 @@ function P2PTestBanner({
           <span className={`text-[10px] font-semibold uppercase tracking-wider ${t.txt}`}>
             Merchant Beta
           </span>
-          <span className="px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider bg-emerald-500/15 text-emerald-500 border border-emerald-500/20 rounded-full">
+          <span className="px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wider bg-black text-white rounded-full">
             On Mainnet
           </span>
         </div>
@@ -1410,6 +1891,74 @@ function P2PTestBanner({
           {buttonText}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Merchant Beta Program card — richer beta-access section shown below
+// the social quests on mobile only (lg:hidden). Same gating/state logic as
+// P2PTestBanner (quests must be verified before the request unlocks).
+function MerchantBetaProgramCard({
+  betaRequest, socialQuestsDone, onSendRequest,
+}: {
+  betaRequest: BetaRequest | null;
+  socialQuestsDone: boolean;
+  onSendRequest: () => void;
+}) {
+  const t = useThemeTokens();
+  const status = betaRequest?.status ?? null;
+  const isOpen = status === 'pending' || status === 'contacted';
+  const isApproved = status === 'approved';
+  const locked = !socialQuestsDone && status == null;
+
+  let buttonText = 'Request Beta Access';
+  if (locked) buttonText = 'Complete Quests to Unlock';
+  else if (status === 'pending') buttonText = 'Request Sent';
+  else if (status === 'contacted') buttonText = "We've Been In Touch";
+  else if (isApproved) buttonText = 'Approved ✓';
+  const disabled = locked || isOpen || isApproved;
+
+  const benefits = [
+    'Early access to P2P App',
+    'Founding Merchant badge',
+    'Priority support',
+    'Future rewards and incentives',
+  ];
+
+  return (
+    <div className={`lg:hidden ${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5`}>
+      <div className="flex items-center gap-2.5 mb-1.5">
+        <h3 className={`text-[18px] font-semibold ${t.txt} tracking-tight`}>Merchant Beta Program</h3>
+        <span className="shrink-0 whitespace-nowrap px-2.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider bg-black text-white rounded-full">
+          On Mainnet
+        </span>
+      </div>
+      <p className={`text-[13px] ${t.muted} mb-4 leading-relaxed`}>
+        Become one of the first merchants on Blip Market.
+      </p>
+      <ul className="space-y-2.5 mb-5">
+        {benefits.map((b) => (
+          <li key={b} className="flex items-center gap-2.5">
+            <CircleCheck className={`w-[18px] h-[18px] ${t.txt} shrink-0`} />
+            <span className={`text-[13.5px] ${t.txt}`}>{b}</span>
+          </li>
+        ))}
+      </ul>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={disabled ? undefined : onSendRequest}
+        className={`w-full px-6 py-3.5 rounded-full text-[14px] font-semibold tracking-tight flex items-center justify-center gap-2 transition ${
+          isApproved
+            ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 cursor-default'
+            : isOpen || locked
+              ? `${t.inputBg} border ${t.border} ${t.sub} cursor-not-allowed`
+              : `${t.accentBg} ${t.accentText} hover:-translate-y-[1px] active:scale-[0.99] shadow-[0_8px_22px_-10px_rgba(0,0,0,0.35)]`
+        }`}
+      >
+        {buttonText}
+        {!disabled && <ArrowRight className="w-4 h-4" />}
+      </button>
     </div>
   );
 }
@@ -1515,19 +2064,45 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
 
   const QuestIcon = quest.icon;
 
+  const rewardPill = (
+    <span
+      className={`text-[11px] font-semibold tracking-tight whitespace-nowrap px-2 py-0.5 rounded-full shrink-0 ${t.inputBg} border ${t.border} ${t.txt}`}
+    >
+      +{formatCount(quest.reward)} BLIP
+    </span>
+  );
+
   return (
     <>
-      <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 flex flex-col ${isDone ? 'opacity-70' : ''}`}>
+      {/* Mobile: compact horizontal card (icon · content · action on one
+          axis). Matches the reference layout. md+ keeps the vertical card. */}
+      <div className={`md:hidden ${t.surface} border ${t.border} rounded-2xl p-3 flex items-center gap-3 shadow-sm ${isDone ? 'opacity-80' : ''}`}>
+        <div className={`w-11 h-11 rounded-xl ${t.inputBg} border ${t.border} flex items-center justify-center shrink-0`}>
+          <QuestIcon className={`w-[18px] h-[18px] ${t.txt}`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-2">
+            <h3 className={`flex-1 min-w-0 text-[14px] font-semibold ${t.txt} tracking-tight leading-tight`}>{quest.title}</h3>
+            {rewardPill}
+          </div>
+          <p className={`text-[12px] ${t.muted} leading-snug mt-1`}>{quest.description}</p>
+        </div>
+        {isDone ? (
+          <CheckCircle2 className="w-[22px] h-[22px] text-emerald-500 shrink-0" />
+        ) : (
+          <button onClick={handleStart} aria-label="Start quest"
+            className={`${t.accentBg} ${t.accentText} w-8 h-8 rounded-full flex items-center justify-center active:scale-[0.95] transition shrink-0`}>
+            <ArrowRight className="w-[15px] h-[15px]" />
+          </button>
+        )}
+      </div>
+
+      <div className={`hidden md:flex ${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 flex-col ${isDone ? 'opacity-70' : ''}`}>
         <div className="flex items-start justify-between mb-3">
           <div className={`w-9 h-9 rounded-xl ${t.inputBg} border ${t.border} flex items-center justify-center`}>
             <QuestIcon className={`w-4 h-4 ${t.txt}`} />
           </div>
-          <span
-            className="text-[11px] font-semibold tracking-tight whitespace-nowrap px-2 py-0.5 rounded-full"
-            style={{ background: 'rgba(204,120,92,0.10)', color: ACCENT }}
-          >
-            +{formatCount(quest.reward)} BLIP
-          </span>
+          {rewardPill}
         </div>
         <div className="mb-4 flex-1 min-w-0">
           <h3 className={`text-[15.5px] font-semibold ${t.txt} mb-1 tracking-tight leading-tight break-words`}>{quest.title}</h3>
@@ -1535,9 +2110,7 @@ function QuestCard({ quest, existing, onUpdate, onShareReferral }: {
         </div>
         <div className={`mt-auto flex ${isDone ? 'justify-end' : 'justify-start'}`}>
           {isDone ? (
-            <div className="flex items-center gap-1.5 text-[13px] font-semibold text-emerald-500">
-              <CheckCircle2 className="w-4 h-4" /> Redeemed
-            </div>
+            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
           ) : (
             <button onClick={handleStart}
               className={`${t.accentBg} ${t.accentText} px-6 py-3 rounded-full text-[13.5px] font-semibold tracking-tight hover:-translate-y-[1px] active:scale-[0.99] transition shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]`}>

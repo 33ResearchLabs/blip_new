@@ -25,6 +25,7 @@ import { getDisplayOrderId } from "@/lib/displayOrderId";
 import { BottomNav } from "./BottomNav";
 import { WaitingTracker, type TrackerBanner } from "./WaitingTracker";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
+import { useCancelOrderSheet } from "@/hooks/useCancelOrderSheet";
 
 const T = {
   hi: "var(--color-text-primary)",
@@ -103,6 +104,7 @@ export const EscrowLockScreen = ({
   const handleConnectWallet = onConnectWallet || (() => setShowWalletModal(true));
   const balanceOk = solanaWallet.usdtBalance !== null && solanaWallet.usdtBalance >= parseFloat(amount || '0');
   const isProcessing = ['signing', 'confirming', 'recording'].includes(escrowTxStatus);
+  const cancel = useCancelOrderSheet();
 
   // QR-scan handoff: when this screen is reached from UpiPayScreen
   // (scan a merchant's UPI QR → enter amount → land here for escrow lock),
@@ -186,6 +188,16 @@ export const EscrowLockScreen = ({
       { icon: <Landmark className="w-4 h-4" />, label: "Method", value: methodLabel },
     ];
 
+    // Stage-aware confirmation in front of the existing cancel handler. This is
+    // a freshly-locked, unmatched sell order (escrow held, no merchant), so the
+    // resolver shows the "Cancel & refund" copy. onConfirm runs the unchanged
+    // onCancelOrder (which cancels + navigates to the order detail).
+    const openCancel = () =>
+      cancel.request(
+        { type: "sell", dbStatus: "escrowed", escrowLocked: true, cryptoAmount: cryptoStr, cryptoCode: "USDT" },
+        { role: "seller", onConfirm: () => onCancelOrder?.() },
+      );
+
     return (
       <div className="relative flex-1 min-h-0 flex flex-col bg-surface-base">
         <WaitingTracker
@@ -208,7 +220,7 @@ export const EscrowLockScreen = ({
           progressSubtitle="Matching merchant · In progress"
           tiles={tiles}
           onOpenOverview={() => setShowOverview(true)}
-          onCancel={onCancelOrder}
+          onCancel={openCancel}
           isCancelling={isCancellingOrder}
           secondaryAction={
             <motion.button
@@ -244,13 +256,16 @@ export const EscrowLockScreen = ({
                 onClose={() => setShowOverview(false)}
                 onCancel={() => {
                   setShowOverview(false);
-                  onCancelOrder?.();
+                  openCancel();
                 }}
                 isCancelling={isCancellingOrder}
               />
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Stage-aware cancel confirmation (portaled above the tracker/overlay). */}
+        {cancel.sheet}
       </div>
     );
   }
@@ -266,7 +281,7 @@ export const EscrowLockScreen = ({
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255,176,46,0.10) 0%, rgba(255,176,46,0.04) 28%, transparent 60%)",
+            "radial-gradient(ellipse 90% 60% at 50% -10%, var(--color-accent-glow) 0%, transparent 60%)",
         }}
       />
       <div
@@ -365,8 +380,7 @@ export const EscrowLockScreen = ({
                 <span
                   style={{
                     width: 6, height: 6, borderRadius: 999,
-                    background: "#ffb02e",
-                    boxShadow: "0 0 6px rgba(255,176,46,0.55)",
+                    background: "var(--color-accent)",
                   }}
                 />
                 <span style={{
@@ -595,8 +609,8 @@ export const EscrowLockScreen = ({
                     className="flex-1"
                     style={{
                       padding: "9px 0", borderRadius: 11,
-                      background: "#ffb02e",
-                      color: "#0b0b0d",
+                      background: "var(--color-accent)",
+                      color: "var(--color-accent-text)",
                       fontSize: 12, fontWeight: 800, letterSpacing: "-0.005em",
                     }}
                   >
@@ -694,11 +708,11 @@ export const EscrowLockScreen = ({
               minHeight: 56,
               borderRadius: 18,
               gap: 8,
-              background: "#ffb02e",
-              border: "1px solid rgba(20,21,26,0.18)",
-              color: "#0b0b0d",
+              background: "var(--color-accent)",
+              border: "1px solid var(--color-border-strong)",
+              color: "var(--color-accent-text)",
               fontSize: 15, fontWeight: 800, letterSpacing: "-0.01em",
-              boxShadow: "0 14px 28px -10px rgba(255,176,46,0.40), inset 0 1px 0 rgba(255,255,255,0.85)",
+              boxShadow: "0 14px 28px -10px rgba(20,21,26,0.35)",
             }}
           >
             <Wallet size={15} strokeWidth={2.6} />
@@ -748,7 +762,7 @@ function TradeRoute() {
   ];
 
   const colorOf = (s: "done" | "active" | "pending") =>
-    s === "active" ? "#0b0b0d" : s === "done" ? "var(--color-text-secondary)" : "var(--color-text-tertiary)";
+    s === "active" ? "var(--color-accent-text)" : s === "done" ? "var(--color-text-secondary)" : "var(--color-text-tertiary)";
 
   return (
     <div
@@ -771,20 +785,20 @@ function TradeRoute() {
                   className="flex items-center justify-center relative"
                   animate={n.state === "active" ? {
                     boxShadow: [
-                      "0 0 0 0 rgba(255,176,46,0.40), 0 6px 14px -6px rgba(20,21,26,0.18)",
-                      "0 0 0 8px rgba(255,176,46,0.0), 0 6px 14px -6px rgba(20,21,26,0.18)",
+                      "0 0 0 0 rgba(130,130,130,0.45), 0 6px 14px -6px rgba(20,21,26,0.18)",
+                      "0 0 0 8px rgba(130,130,130,0.0), 0 6px 14px -6px rgba(20,21,26,0.18)",
                     ],
                   } : undefined}
                   transition={{ duration: 1.6, repeat: Infinity, ease: "easeOut" }}
                   style={{
                     width: 34, height: 34, borderRadius: 11,
                     background: n.state === "active"
-                      ? "#ffb02e"
+                      ? "var(--color-accent)"
                       : n.state === "done"
                       ? "var(--color-surface-hover)"
                       : "var(--color-surface-hover)",
                     border: n.state === "active"
-                      ? "1px solid rgba(20,21,26,0.18)"
+                      ? "1px solid var(--color-border-strong)"
                       : "1px solid var(--color-border-medium)",
                   }}
                 >
@@ -816,7 +830,7 @@ function TradeRoute() {
                         top: 0, bottom: 0, left: 0, right: 0,
                         borderRadius: 999,
                         backgroundImage:
-                          "repeating-linear-gradient(90deg, rgba(255,176,46,0.85) 0 6px, transparent 6px 12px)",
+                          "repeating-linear-gradient(90deg, var(--color-text-secondary) 0 6px, transparent 6px 12px)",
                         backgroundSize: "12px 100%",
                       }}
                       animate={{ backgroundPositionX: ["0px", "12px"] }}
@@ -860,8 +874,7 @@ function NetworkTicker() {
           transition={{ duration: 1.6, repeat: Infinity }}
           style={{
             width: 6, height: 6, borderRadius: 999,
-            background: "#ffb02e",
-            boxShadow: "0 0 6px rgba(255,176,46,0.55)",
+            background: "var(--color-accent)",
           }}
         />
         <span style={{
@@ -942,7 +955,7 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
           width: fillWidth,
           borderRadius: 999,
           background:
-            "linear-gradient(90deg, rgba(255,176,46,0.18) 0%, rgba(255,176,46,0.40) 100%)",
+            "linear-gradient(90deg, var(--color-border-subtle) 0%, var(--color-border-strong) 100%)",
         }}
       />
 
@@ -985,8 +998,8 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
           width: THUMB,
           height: THUMB,
           borderRadius: 999,
-          background: "#ffb02e",
-          border: "1px solid rgba(20,21,26,0.18)",
+          background: "var(--color-accent)",
+          border: "1px solid var(--color-border-strong)",
           boxShadow:
             "0 6px 14px -6px rgba(20,21,26,0.18), inset 0 1px 0 rgba(255,255,255,0.85)",
           touchAction: "pan-y",
@@ -995,9 +1008,9 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
         className="absolute flex items-center justify-center"
       >
         {confirmed ? (
-          <Loader2 size={18} className="animate-spin" style={{ color: "#0b0b0d" }} />
+          <Loader2 size={18} className="animate-spin" style={{ color: "var(--color-accent-text)" }} />
         ) : (
-          <Lock size={16} strokeWidth={2.6} style={{ color: "#0b0b0d" }} />
+          <Lock size={16} strokeWidth={2.6} style={{ color: "var(--color-accent-text)" }} />
         )}
       </motion.div>
     </div>

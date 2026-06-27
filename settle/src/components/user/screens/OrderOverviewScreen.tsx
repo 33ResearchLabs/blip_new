@@ -277,7 +277,7 @@ export function OrderOverviewScreen({
             whileTap={{ scale: 0.98 }}
             onClick={onCancel}
             disabled={isCancelling}
-            className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-error-dim text-error border border-error-border disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
             Cancel Order
@@ -286,7 +286,7 @@ export function OrderOverviewScreen({
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={onClose}
-            className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-surface-active text-text-primary border border-border-subtle"
+            className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent"
           >
             Back
           </motion.button>

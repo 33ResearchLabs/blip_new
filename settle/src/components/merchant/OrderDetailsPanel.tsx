@@ -490,7 +490,7 @@ export function OrderDetailsPanel({
         <div className="absolute inset-0 backdrop-blur-sm" />
         <div className="relative h-full flex items-center justify-center p-4">
           <div
-            className="bg-card-solid rounded-2xl w-full max-w-sm max-h-[75vh] overflow-y-auto border border-border"
+            className="bg-card-solid rounded-2xl w-full max-w-xs max-h-[75vh] overflow-y-auto border border-border"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header skeleton */}
@@ -675,7 +675,7 @@ export function OrderDetailsPanel({
       {/* Modal container */}
       <div className="relative h-full flex items-center justify-center p-4">
         <div
-          className="bg-card-solid rounded-2xl w-full max-w-sm max-h-[75vh] overflow-y-auto border border-border"
+          className="bg-card-solid rounded-2xl w-full max-w-xs max-h-[75vh] overflow-y-auto border border-border"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}

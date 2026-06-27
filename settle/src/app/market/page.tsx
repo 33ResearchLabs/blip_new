@@ -58,6 +58,7 @@ import { useMerchantWelcome } from "@/hooks/useMerchantWelcome";
 import { OnboardingProvider } from "@/contexts/OnboardingContext";
 import { OnboardingTour } from "@/components/merchant/OnboardingTour";
 import { prefetchOrderMessages } from "@/hooks/useRealtimeChat";
+import { isDuplicateRealtimeEvent } from "@/lib/notifications/realtimeDedup";
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -604,17 +605,22 @@ export default function MerchantDashboard() {
       actorId: merchantId || undefined,
       onNewMessage: (
         chatId?: string,
-        message?: { from: string; text: string },
+        message?: { id?: string; from: string; text: string },
       ) => {
         // Conversation refresh always runs — that's data state, not an alert.
         // Sound + toast are the merchant-visible alert and respect the
         // "Chat Messages" pref (default true → unchanged behavior).
         const { chatMessages } = getNotifPrefs();
-        if (chatMessages) playSound("message");
         fetchOrderConversationsRef.current?.();
-        if (message && message.from !== "me" && chatMessages) {
-          toast.showNewMessage("User", message.text?.substring(0, 80));
-        }
+        if (!message || message.from === "me" || !chatMessages) return;
+        // Dedup the alert across the two merchant chat transports (this WS path
+        // + the private-channel path in useMerchantRealtimeEvents) by message id
+        // so one message never produces two toasts / two beeps.
+        if (isDuplicateRealtimeEvent("chat-toast-mrc", message.id)) return;
+        playSound("message");
+        const senderName =
+          useMerchantStore.getState().orders.find((o) => o.id === chatId)?.user || "User";
+        toast.showNewMessage(senderName, message.text?.substring(0, 80));
       },
     });
 

@@ -53,21 +53,23 @@ import {
   Plus,
   Users,
   Crown,
-  BadgeCheck,
-  Star,
   Clock,
   Paperclip,
   Smile,
   LifeBuoy,
   CircleDollarSign,
+  Flag,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
+import { openIssueReporter } from "@/components/IssueReporter";
 import { useMerchantStore } from "@/stores/merchantStore";
 import {
   useMerchantConversations,
   type OrderConversation,
 } from "@/hooks/useMerchantConversations";
 import { useRealtimeChat, type ChatMessage } from "@/hooks/useRealtimeChat";
+import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
+import { usePusher } from "@/context/PusherContext";
 import { useOrderActionDispatch } from "@/hooks/useOrderActionDispatch";
 import { ImageUpload } from "@/components/chat/ImageUpload";
 import { ReceiptCard } from "@/components/chat/cards";
@@ -75,6 +77,18 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { orderActionKey } from "@/lib/api/idempotencyKeys";
 import type { BackendOrder, ActionType } from "@/types/backendOrder";
 import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
+import { useSolanaWallet } from "@/context/SolanaWalletContext";
+import { useSounds } from "@/hooks/useSounds";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useEscrowOperations } from "@/hooks/useEscrowOperations";
+import { mapDbOrderToUI } from "@/lib/orders/mappers";
+import { MOCK_MODE } from "@/lib/config/mockMode";
+import { EscrowLockModal } from "@/components/merchant/EscrowLockModal";
+import { EscrowReleaseModal } from "@/components/merchant/EscrowReleaseModal";
+import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
+import { MerchantAppealSheet } from "@/components/merchant/MerchantAppealSheet";
+import { useOrderAppeal, isActiveAppeal } from "@/hooks/useOrderAppeal";
+import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -176,8 +190,14 @@ function progressFraction(status?: string) {
 }
 
 /* Actions that require the embedded-wallet / on-chain escrow signing flow.
-   We do NOT re-implement signing here — clicking routes to the dashboard. */
+   LOCK_ESCROW now runs in-chat via the escrow modal; ACCEPT / CLAIM still
+   route to the dashboard (handled in handleAction). */
 const WALLET_FLOW_ACTIONS = new Set<ActionType>(["ACCEPT", "LOCK_ESCROW", "CLAIM"]);
+
+/* Wallet-flow actions that still bounce the merchant to the dashboard (i.e.
+   everything except LOCK_ESCROW, which we now handle in the chat tab). Drives
+   the ↗ icon + caption so Lock Escrow no longer looks like a redirect. */
+const DASHBOARD_REDIRECT_ACTIONS = new Set<ActionType>(["ACCEPT", "CLAIM"]);
 
 const ACTION_ICON: Partial<Record<ActionType, typeof Check>> = {
   ACCEPT: Check,
@@ -203,6 +223,19 @@ export default function TradeChatPage() {
   const router = useRouter();
   const merchantId = useMerchantStore((s) => s.merchantId);
   const merchantInfo = useMerchantStore((s) => s.merchantInfo);
+
+  // Initialize the Pusher actor for this page. The dashboard does this via
+  // useMerchantEffects, but the chat tab doesn't mount that hook — so on a HARD
+  // REFRESH of /market/chat (vs. navigating in from the dashboard, where the
+  // connection is already live) the Pusher client was never created. That left
+  // the whole tab on polling only: chat history (loaded inside subscribeToOrder,
+  // which bails when there's no channel), the right-rail order, and the inbox
+  // all fell back to slow polls. Setting the actor here connects Pusher so chat
+  // + order state load and update in realtime. setActor is idempotent.
+  const { setActor: setPusherActor } = usePusher();
+  useEffect(() => {
+    if (merchantId) setPusherActor("merchant", merchantId);
+  }, [merchantId, setPusherActor]);
 
   const {
     orderConversations,
@@ -297,33 +330,24 @@ export default function TradeChatPage() {
   }, [activeOrderId, activeWindow?.messages.length]);
 
   // ── live order details for the right rail ──
-  const [order, setOrder] = useState<BackendOrder | null>(null);
-  const [orderLoading, setOrderLoading] = useState(false);
-
-  const loadOrder = useCallback(async (orderId: string) => {
-    setOrderLoading(true);
-    try {
-      const res = await fetchWithAuth(`/api/orders/${orderId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const o: BackendOrder = data?.data ?? data;
-      setOrder(o);
-    } catch {
-      /* best-effort */
-    } finally {
-      setOrderLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!activeOrderId) {
-      setOrder(null);
-      return;
-    }
-    loadOrder(activeOrderId);
-    const t = setInterval(() => loadOrder(activeOrderId), 15000);
-    return () => clearInterval(t);
-  }, [activeOrderId, loadOrder]);
+  // Realtime (Pusher per-order channel) with a polling fallback. This replaces
+  // the old 15s-only poll so order-state changes — especially a counterparty's
+  // mutual-cancel request, which doesn't change `status` — reflect near-instantly
+  // (the hook refetches on every order event, so `cancel_requested_by` and the
+  // Agree/Decline button appear at the ~2s backend floor instead of up to 15s).
+  const {
+    order: realtimeOrder,
+    isLoading: orderLoading,
+    refetch: refetchOrder,
+  } = useRealtimeOrder(activeOrderId);
+  const order = realtimeOrder as unknown as BackendOrder | null;
+  // Back-compat alias: existing call sites imperatively reload after an action.
+  // The hook always refetches its bound order (activeOrderId), so the orderId
+  // arg is accepted but ignored.
+  const loadOrder = useCallback(
+    (_orderId?: string) => refetchOrder(),
+    [refetchOrder],
+  );
 
   // ── action dispatch ──
   const [actionMsg, setActionMsg] = useState<string | null>(null);
@@ -343,14 +367,122 @@ export default function TradeChatPage() {
     type: "CANCEL" | "DISPUTE";
     reason: string;
   } | null>(null);
+  // Confirm modal for plain confirm-then-dispatch actions (e.g. SEND_PAYMENT),
+  // replacing the native window.confirm(). The orderId is captured at open time
+  // so confirming after switching conversations can't dispatch against the
+  // wrong order — window.confirm was synchronous and couldn't be raced this way.
+  const [confirmModal, setConfirmModal] = useState<{
+    type: ActionType;
+    orderId: string;
+    message: string;
+  } | null>(null);
   // Responding to an incoming mutual-cancel request (Agree / Decline).
   const [respondingCancel, setRespondingCancel] = useState(false);
+
+  // ── in-chat escrow lock ──
+  // Lets the merchant lock escrow directly from the chat tab instead of being
+  // bounced to the dashboard. Reuses the dashboard's exact escrow hook + modal,
+  // so the on-chain signing / idempotency path is identical — only the mount
+  // point differs. Wallet connection still lives on the dashboard (handleAction
+  // falls back to /market when the wallet isn't connected).
+  const solanaWallet = useSolanaWallet();
+  const { playSound } = useSounds();
+  const { addNotification } = useNotifications(merchantId, !!merchantId);
+  // effectiveBalance mirrors useOrderFetching: mock mode uses a fixed in-app
+  // balance, live mode reads on-chain USDT. The modal shows it; executeLockEscrow
+  // re-checks the real on-chain balance before signing.
+  const inAppBalance = MOCK_MODE ? 10000 : null;
+  const effectiveBalance = MOCK_MODE ? inAppBalance : (solanaWallet?.usdtBalance ?? null);
+  const {
+    showEscrowModal,
+    escrowOrder,
+    isLockingEscrow,
+    escrowTxHash,
+    escrowError,
+    openEscrowModal,
+    executeLockEscrow,
+    closeEscrowModal,
+    // Release flow — used by CONFIRM_PAYMENT so the seller signs the on-chain
+    // release (sends USDT to the buyer + completes) directly in the chat tab.
+    showReleaseModal,
+    releaseOrder,
+    isReleasingEscrow,
+    releaseTxHash,
+    releaseError,
+    openReleaseModal,
+    executeRelease,
+    closeReleaseModal,
+  } = useEscrowOperations({
+    solanaWallet,
+    effectiveBalance,
+    inAppBalance,
+    addNotification,
+    playSound,
+    afterMutationReconcile: async (orderId: string) => {
+      await loadOrder(orderId);
+      fetchOrderConversations();
+    },
+    fetchOrders: async () => {
+      fetchOrderConversations();
+    },
+    refreshBalance: () => {
+      solanaWallet?.refreshBalances?.();
+    },
+    // Wallet connection lives on the dashboard; if the escrow flow needs it,
+    // send the merchant there (handleAction also pre-checks `connected`).
+    setShowWalletModal: (show: boolean) => {
+      if (show) router.push("/market");
+    },
+    setRatingModalData: () => {},
+  });
 
   const handleAction = useCallback(
     async (type: ActionType) => {
       if (!activeOrderId) return;
 
-      // Wallet-signing / on-chain escrow actions live on the dashboard.
+      // Lock Escrow runs IN the chat tab via the escrow modal. Wallet
+      // connection still lives on the dashboard, so fall back to /market when
+      // the wallet isn't connected.
+      if (type === "LOCK_ESCROW") {
+        if (!order) return;
+        if (!solanaWallet?.connected) {
+          router.push("/market");
+          return;
+        }
+        openEscrowModal(
+          mapDbOrderToUI(
+            order as unknown as Parameters<typeof mapDbOrderToUI>[0],
+            merchantId,
+            merchantInfo?.display_name ?? null,
+          ),
+        );
+        return;
+      }
+
+      // Confirm Payment = release escrow. The seller must sign the on-chain
+      // release that sends USDT to the buyer + completes the order. Previously
+      // this fell through to the generic action dispatch, which only advanced
+      // the DB to `payment_confirmed` and NEVER released the crypto (a dead-end
+      // state with no further action). Now it opens the release modal and runs
+      // the same on-chain release the dashboard uses. Wallet connection still
+      // lives on the dashboard, so fall back to /market when not connected.
+      if (type === "CONFIRM_PAYMENT") {
+        if (!order) return;
+        if (!solanaWallet?.connected) {
+          router.push("/market");
+          return;
+        }
+        openReleaseModal(
+          mapDbOrderToUI(
+            order as unknown as Parameters<typeof mapDbOrderToUI>[0],
+            merchantId,
+            merchantInfo?.display_name ?? null,
+          ),
+        );
+        return;
+      }
+
+      // ACCEPT / CLAIM still need the dashboard wallet flow.
       if (WALLET_FLOW_ACTIONS.has(type)) {
         router.push("/market");
         return;
@@ -364,14 +496,16 @@ export default function TradeChatPage() {
 
       const labels: Record<string, string> = {
         SEND_PAYMENT: "Mark this order as payment sent?",
-        CONFIRM_PAYMENT: "Confirm payment received and release escrow?",
       };
-      if (!window.confirm(labels[type] ?? `Run ${type}?`)) return;
-
-      setActionMsg(null);
-      await dispatch(activeOrderId, type, {});
+      // In-app confirm modal (replaces the native window.confirm). The actual
+      // dispatch runs in confirmGenericAction when the user confirms.
+      setConfirmModal({
+        type,
+        orderId: activeOrderId,
+        message: labels[type] ?? `Run ${type}?`,
+      });
     },
-    [activeOrderId, dispatch, router],
+    [activeOrderId, dispatch, router, order, solanaWallet, openEscrowModal, openReleaseModal, merchantId, merchantInfo],
   );
 
   // Confirm the reason modal → dispatch the cancel/dispute with the typed reason.
@@ -383,6 +517,17 @@ export default function TradeChatPage() {
     setActionMsg(null);
     await dispatch(activeOrderId, type, { reason: reason.trim() || fallback });
   }, [reasonModal, activeOrderId, dispatch]);
+
+  // Confirm the generic confirm modal → dispatch against the captured orderId
+  // (not the current activeOrderId, which may have changed if the merchant
+  // switched conversations while the modal was open).
+  const confirmGenericAction = useCallback(async () => {
+    if (!confirmModal) return;
+    const { type, orderId } = confirmModal;
+    setConfirmModal(null);
+    setActionMsg(null);
+    await dispatch(orderId, type, {});
+  }, [confirmModal, dispatch]);
 
   // Respond to an incoming mutual-cancel request: accept (refund) or decline.
   const respondCancel = useCallback(
@@ -543,17 +688,6 @@ export default function TradeChatPage() {
               ))
             )}
           </div>
-
-          <div className="shrink-0 p-3 border-t border-white/[0.06]">
-            <button
-              type="button"
-              title="Create a group (coming soon)"
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-foreground/70 text-sm font-medium transition-colors"
-            >
-              <Users className="w-4 h-4" />
-              New Group
-            </button>
-          </div>
         </aside>
 
         {/* ───────────── CENTER: conversation ───────────── */}
@@ -628,7 +762,7 @@ export default function TradeChatPage() {
                     {activeWindow ? "No messages yet — say hello." : <Loader2 className="w-5 h-5 animate-spin" />}
                   </div>
                 ) : (
-                  <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} />
+                  <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} viewerRole={order?.my_role === "buyer" || order?.my_role === "seller" ? order.my_role : null} />
                 )}
               </div>
 
@@ -731,6 +865,7 @@ export default function TradeChatPage() {
           <TradeDetailsPane
             convo={activeConvo}
             order={order}
+            merchantId={merchantId}
             loading={orderLoading}
             actionLoading={actionLoading}
             actionMsg={actionMsg}
@@ -740,6 +875,10 @@ export default function TradeChatPage() {
             incomingCancelRequest={incomingCancel}
             iRequestedCancel={iRequestedCancel}
             cancelReqReason={cancelReqReason}
+            onAppealResolved={() => {
+              if (activeOrderId) loadOrder(activeOrderId);
+              fetchOrderConversations();
+            }}
             show={showDetails}
             onClose={() => setShowDetails(false)}
           />
@@ -795,6 +934,66 @@ export default function TradeChatPage() {
           </div>
         </div>
       )}
+
+      {/* Generic confirm modal — replaces the native window.confirm() for
+          plain confirm-then-dispatch actions (e.g. Mark Payment Sent). */}
+      {confirmModal && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setConfirmModal(null)}
+        >
+          <div
+            className="w-full max-w-[380px] rounded-2xl bg-[var(--color-bg-secondary)] border border-white/[0.1] p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-[16px] font-semibold text-foreground">Confirm</h3>
+            <p className="text-[13px] text-foreground/55 mt-1.5 leading-snug">
+              {confirmModal.message}
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 py-2.5 rounded-xl border border-white/[0.12] bg-white/[0.04] text-foreground text-[14px] font-medium hover:bg-white/[0.08]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmGenericAction}
+                disabled={actionLoading}
+                className="flex-1 py-2.5 rounded-xl bg-accent text-accent-text text-[14px] font-semibold disabled:opacity-50"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Escrow lock — opens in-chat when the merchant taps "Lock Escrow"
+          (reuses the dashboard's escrow modal + signing flow). */}
+      <EscrowLockModal
+        showEscrowModal={showEscrowModal}
+        escrowOrder={escrowOrder}
+        isLockingEscrow={isLockingEscrow}
+        escrowTxHash={escrowTxHash}
+        escrowError={escrowError}
+        effectiveBalance={effectiveBalance}
+        onClose={closeEscrowModal}
+        onExecute={executeLockEscrow}
+      />
+
+      {/* Confirm Payment → release escrow — opens in-chat when the seller taps
+          "Confirm Payment" (signs the on-chain release, sends USDT to the buyer,
+          completes the order). Reuses the dashboard's escrow release flow. */}
+      <EscrowReleaseModal
+        showReleaseModal={showReleaseModal}
+        releaseOrder={releaseOrder}
+        isReleasingEscrow={isReleasingEscrow}
+        releaseTxHash={releaseTxHash}
+        releaseError={releaseError}
+        onClose={closeReleaseModal}
+        onExecute={executeRelease}
+      />
     </div>
   );
 }
@@ -852,19 +1051,6 @@ function TradeSummaryStrip({
         </div>
 
         <div className="min-w-0">
-          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Order ID</p>
-          <p className="font-mono text-xs text-foreground/80 truncate">
-            {order?.order_number ?? convo.order_number}
-          </p>
-          <button
-            onClick={onViewOrder}
-            className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-accent hover:opacity-80"
-          >
-            View Order <ExternalLink className="w-2.5 h-2.5" />
-          </button>
-        </div>
-
-        <div className="min-w-0">
           <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Total Amount</p>
           <p className="text-sm font-semibold text-foreground leading-tight">{formatFiat(fiat, ccy)}</p>
         </div>
@@ -888,7 +1074,15 @@ function TradeSummaryStrip({
 
 /* ───────────────────── message stream ───────────────────── */
 
-function MessageStream({ messages, status }: { messages: ChatMessage[]; status: string }) {
+function MessageStream({
+  messages,
+  status,
+  viewerRole,
+}: {
+  messages: ChatMessage[];
+  status: string;
+  viewerRole?: "buyer" | "seller" | null;
+}) {
   const out: ReactNode[] = [];
   let lastDay = "";
   for (const m of messages) {
@@ -904,12 +1098,20 @@ function MessageStream({ messages, status }: { messages: ChatMessage[]; status: 
         </div>,
       );
     }
-    out.push(<MessageItem key={m.id} m={m} status={status} />);
+    out.push(<MessageItem key={m.id} m={m} status={status} viewerRole={viewerRole} />);
   }
   return <>{out}</>;
 }
 
-function MessageItem({ m, status }: { m: ChatMessage; status: string }) {
+function MessageItem({
+  m,
+  status,
+  viewerRole,
+}: {
+  m: ChatMessage;
+  status: string;
+  viewerRole?: "buyer" | "seller" | null;
+}) {
   // Rich receipt cards (Payment Sent / Trade Completed) when the message
   // carries structured receipt data.
   if (m.messageType === "receipt" && m.receiptData) {
@@ -932,7 +1134,7 @@ function MessageItem({ m, status }: { m: ChatMessage; status: string }) {
       <div className="flex justify-center">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[10px] text-foreground/50 max-w-[80%] text-center">
           {m.from === "compliance" && <span className="text-accent font-semibold">Compliance:</span>}
-          {m.text}
+          {personalizeAppealMessage(m.text, viewerRole)}
         </span>
       </div>
     );
@@ -1077,6 +1279,7 @@ function ConversationRow({
 function TradeDetailsPane({
   convo,
   order,
+  merchantId,
   loading,
   actionLoading,
   actionMsg,
@@ -1086,11 +1289,13 @@ function TradeDetailsPane({
   incomingCancelRequest,
   iRequestedCancel,
   cancelReqReason,
+  onAppealResolved,
   show,
   onClose,
 }: {
   convo: OrderConversation;
   order: BackendOrder | null;
+  merchantId: string | null;
   loading: boolean;
   actionLoading: boolean;
   actionMsg: string | null;
@@ -1100,6 +1305,7 @@ function TradeDetailsPane({
   incomingCancelRequest: boolean;
   iRequestedCancel: boolean;
   cancelReqReason: string | null;
+  onAppealResolved: () => void;
   show: boolean;
   onClose: () => void;
 }) {
@@ -1110,6 +1316,20 @@ function TradeDetailsPane({
   const fiat = order?.fiat_amount ?? convo.fiat_amount;
   const ccy = order?.fiat_currency ?? convo.fiat_currency;
   const rate = order?.rate;
+
+  // Raise-Appeal entry point. Mirrors OrderQuickView: the merchant can open an
+  // appeal once the trade is accepted (accepted / escrowed / payment_sent) and
+  // no appeal is already active. Opening one pauses the auto-cancel timers and
+  // starts the peer-resolution flow. `appealOrderId` falls back to the convo
+  // snapshot so the hook works before the live order loads.
+  const appealOrderId = order?.id ?? convo.order_id;
+  const { appeal, refetch: refetchAppeal } = useOrderAppeal(appealOrderId, {
+    enabled: !!appealOrderId,
+  });
+  const appealActive = isActiveAppeal(appeal);
+  const showAppeal =
+    ["accepted", "escrowed", "payment_sent"].includes(status) && !appealActive;
+  const [appealSheetOpen, setAppealSheetOpen] = useState(false);
 
   // Backend-driven buttons (never computed on the frontend). primaryAction is
   // always present; secondaryAction may be null.
@@ -1162,33 +1382,6 @@ function TradeDetailsPane({
       </div>
 
       <div className="flex-1 overflow-y-auto pulse-scroll p-4 space-y-4">
-        {/* counterparty */}
-        <div className="bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl p-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-foreground"
-              style={avatarTint(convo.user.username)}
-            >
-              {initials(convo.user.username)}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1">
-                <p className="text-sm font-semibold text-foreground truncate">{convo.user.username}</p>
-                <BadgeCheck className="w-3.5 h-3.5 text-accent shrink-0" />
-              </div>
-              <p className="text-[11px] text-foreground/50">
-                {convo.user.total_trades ?? 0} trades
-              </p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="inline-flex items-center gap-0.5 text-sm font-semibold text-foreground">
-                <Star className="w-3.5 h-3.5 text-warning fill-warning" />
-                {convo.user.rating?.toFixed(1) ?? "—"}
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* active order */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
@@ -1230,6 +1423,20 @@ function TradeDetailsPane({
         <div className="space-y-2">
           <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Actions</p>
           {actionMsg && <p className="text-[11px] text-error px-1">{actionMsg}</p>}
+
+          {/* Mutual-cancellation APPEAL — Agree to Cancel / Reject when the
+              counterparty raised one, or a "waiting" note when I did. Self-hides
+              when there's no active mutual_cancel appeal. This is the current
+              cancellation path; the cancel_requested_by block below is legacy. */}
+          {(order?.id ?? convo.order_id) && (
+            <MutualCancelAppealBanner
+              orderId={order?.id ?? convo.order_id}
+              viewerActorId={merchantId}
+              variant="merchant"
+              enabled={!["cancelled", "expired", "completed", "disputed"].includes(status)}
+              onResolved={onAppealResolved}
+            />
+          )}
 
           {/* Incoming mutual-cancel request — respond inline (Agree / Decline). */}
           {incomingCancelRequest && (
@@ -1281,7 +1488,7 @@ function TradeDetailsPane({
           ) : (
             visibleButtons.map((b) => {
               const Icon = ACTION_ICON[b.type] ?? Check;
-              const isWalletFlow = WALLET_FLOW_ACTIONS.has(b.type);
+              const redirectsToDashboard = DASHBOARD_REDIRECT_ACTIONS.has(b.type);
               const cls =
                 b.kind === "secondary"
                   ? b.type === "DISPUTE"
@@ -1298,15 +1505,29 @@ function TradeDetailsPane({
                 >
                   {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
                   {b.label}
-                  {isWalletFlow && <ExternalLink className="w-3 h-3 opacity-60" />}
+                  {redirectsToDashboard && <ExternalLink className="w-3 h-3 opacity-60" />}
                 </button>
               );
             })
           )}
-          {visibleButtons.some((b) => WALLET_FLOW_ACTIONS.has(b.type)) && (
+          {visibleButtons.some((b) => DASHBOARD_REDIRECT_ACTIONS.has(b.type)) && (
             <p className="text-[10px] text-foreground/40 text-center leading-snug">
-              Escrow & accept require your wallet — opens the trade panel.
+              Accepting a trade opens the dashboard for wallet signing.
             </p>
+          )}
+
+          {/* Raise Appeal — available once the trade is accepted and no appeal
+              is already active. Opens the merchant appeal sheet (same endpoint /
+              flow as the dashboard quick-view). */}
+          {showAppeal && (
+            <button
+              type="button"
+              onClick={() => setAppealSheetOpen(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-white/12 text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-sm transition-colors"
+            >
+              <Flag className="w-4 h-4" />
+              Raise Appeal
+            </button>
           )}
         </div>
 
@@ -1324,7 +1545,8 @@ function TradeDetailsPane({
         <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Need Help?</p>
         <button
           type="button"
-          title="Open a support ticket (coming soon)"
+          title="Open a support ticket"
+          onClick={() => openIssueReporter()}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-white/12 text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-sm transition-colors"
         >
           <LifeBuoy className="w-4 h-4" />
@@ -1347,6 +1569,22 @@ function TradeDetailsPane({
             {body}
           </aside>
         </>
+      )}
+
+      {/* Merchant Raise-Appeal sheet — fixed overlay (z-[150]). On submit, refresh
+          the appeal (hides the button, surfaces the mutual-cancel banner) and the
+          order so its actions reflect the paused timers. */}
+      {appealSheetOpen && appealOrderId && (
+        <MerchantAppealSheet
+          orderId={appealOrderId}
+          orderStatus={status}
+          displayId={order?.order_number ?? convo.order_number}
+          onClose={() => setAppealSheetOpen(false)}
+          onSubmitted={() => {
+            void refetchAppeal();
+            onAppealResolved();
+          }}
+        />
       )}
     </>
   );

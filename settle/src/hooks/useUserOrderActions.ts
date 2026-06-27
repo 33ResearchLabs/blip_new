@@ -885,10 +885,55 @@ export function useUserOrderActions({
     }
   };
 
-  const requestCancelOrder = async (reason?: string) => {
-    if (!activeOrder || !userId) return;
+  // Open a mutual-cancellation APPEAL on an accepted order. The counterparty
+  // agrees (→ cancel + refund) or rejects (→ dispute) via the in-order banner,
+  // and an unanswered request auto-escalates to a dispute. Returns true on success.
+  const openMutualCancelAppeal = async (reason?: string): Promise<boolean> => {
+    if (!activeOrder || !userId) return false;
+    try {
+      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/appeal`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": orderActionKey(activeOrder.id, "open_appeal"),
+        },
+        body: JSON.stringify({
+          issue_key: "mutual_cancel",
+          description: reason || "Requested mutual cancellation",
+          initiated_by: "user",
+          user_id: userId,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        playSound("click");
+        showAlert(
+          "Cancellation requested",
+          "The other party has been notified. If they don't respond, it becomes a dispute for review.",
+          "success",
+        );
+        fetchOrders(userId);
+        return true;
+      }
+      playSound("error");
+      showAlert("Error", data.error || "Failed to request cancellation", "error");
+      return false;
+    } catch (err) {
+      console.error("Failed to open mutual-cancel appeal:", err);
+      playSound("error");
+      return false;
+    }
+  };
+
+  const requestCancelOrder = async (reason?: string): Promise<boolean> => {
+    if (!activeOrder || !userId) return false;
     setIsRequestingCancel(true);
     try {
+      // Accepted/claimed orders (a counterparty is engaged) resolve through the
+      // mutual-cancellation appeal; unclaimed orders keep the legacy handshake.
+      if (activeOrder.acceptedAt) {
+        return await openMutualCancelAppeal(reason);
+      }
       const res = await fetchWithAuth(
         `/api/orders/${activeOrder.id}/cancel-request`,
         {
@@ -931,13 +976,15 @@ export function useUserOrderActions({
           ),
         );
         fetchOrders(userId);
-      } else {
-        playSound("error");
-        showAlert("Error", data.error || "Failed to request cancel", "error");
+        return true;
       }
+      playSound("error");
+      showAlert("Error", data.error || "Failed to request cancel", "error");
+      return false;
     } catch (err) {
       console.error("Failed to request cancel:", err);
       playSound("error");
+      return false;
     } finally {
       setIsRequestingCancel(false);
     }
@@ -956,6 +1003,13 @@ export function useUserOrderActions({
     if (!activeOrder || !userId) return;
     setIsRequestingCancel(true);
     try {
+      // Post-acceptance unilateral cancel is no longer permitted — route to the
+      // mutual-cancellation appeal (counterparty must agree, else it becomes a
+      // dispute). Pre-acceptance (open/unclaimed) still cancels directly below.
+      if (activeOrder.acceptedAt) {
+        await openMutualCancelAppeal(reason);
+        return;
+      }
       const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/action`, {
         method: "POST",
         headers: {

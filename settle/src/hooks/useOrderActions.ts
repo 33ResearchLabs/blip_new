@@ -17,7 +17,7 @@ const IS_EMBEDDED_WALLET = process.env.NEXT_PUBLIC_EMBEDDED_WALLET === 'true';
 interface UseOrderActionsParams {
   solanaWallet: any;
   effectiveBalance: number | null;
-  addNotification: (type: Notification['type'], message: string, orderId?: string) => void;
+  addNotification: (type: Notification['type'], message: string, orderId?: string, opts?: { sticky?: boolean; priority?: 'high' | 'normal'; status?: string }) => void;
   playSound: (sound: 'message' | 'send' | 'trade_start' | 'trade_complete' | 'notification' | 'error' | 'click' | 'new_order' | 'order_complete') => void;
   afterMutationReconcile: (orderId: string, optimisticUpdate?: Partial<Order>) => Promise<void>;
   setShowWalletModal: (show: boolean) => void;
@@ -268,7 +268,7 @@ export function useOrderActions({
 
       const uiStatus = hasOnChainEscrow ? "escrow" : "active";
       playSound('click');
-      addNotification('system', `Order accepted! ${nextStepMsg}`, order.id);
+      addNotification('system', `Order accepted! ${nextStepMsg}`, order.id, { status: 'accepted' });
       await afterMutationReconcile(order.id, { status: uiStatus as "escrow" | "active", expiresIn: 1800 });
     } catch (error) {
       console.error("Error accepting order:", error);
@@ -568,7 +568,7 @@ export function useOrderActions({
         const claimedMsg = data.data?.claimed
           ? 'Order claimed and payment marked as sent.'
           : 'Payment marked as sent.';
-        addNotification('system', `${claimedMsg} Waiting for seller to release escrow.`, order.id);
+        addNotification('system', `${claimedMsg} Waiting for seller to release escrow.`, order.id, { status: 'payment_sent' });
         await afterMutationReconcile(order.id, { status: "escrow" as const });
       } else {
         addNotification('system', `Failed: ${data.error || 'Unknown error'}`, order.id);
@@ -605,7 +605,7 @@ export function useOrderActions({
         if (data.success) {
           setSelectedOrderPopup(null);
           playSound('trade_complete');
-          addNotification('complete', `Trade completed with ${order.user}!`, order.id);
+          addNotification('complete', `Trade completed with ${order.user}!`, order.id, { status: 'completed' });
           await afterMutationReconcile(order.id, { status: "completed" as const });
           syncBalance();
         }
@@ -804,7 +804,7 @@ export function useOrderActions({
                       if (syncRes.ok) {
 
                         playSound('trade_complete');
-                        addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId);
+                        addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId, { status: 'completed' });
                         await afterMutationReconcile(orderId, { status: 'completed' as const });
                         syncBalance();
                         return;
@@ -875,7 +875,7 @@ export function useOrderActions({
           }
 
           playSound('trade_complete');
-          addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId);
+          addNotification('complete', `Order completed - ${order.amount} USDT released to buyer`, orderId, { status: 'completed' });
           await afterMutationReconcile(orderId, { status: "completed" as const });
           syncBalance();
         } catch (error) {

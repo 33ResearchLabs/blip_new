@@ -59,6 +59,7 @@ import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
 import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
 import { useGlobalNow } from "@/hooks/useGlobalNow";
+import { useCancelOrderSheet } from "@/hooks/useCancelOrderSheet";
 import { OrderProgressStepper } from "@/components/user/OrderProgressStepper";
 import { OrderMinimisedPill } from "@/components/user/OrderMinimisedPill";
 import { ScratchRewardModal } from "@/components/user/ScratchRewardModal";
@@ -169,6 +170,8 @@ const MUTED_BTN = "bg-surface-active text-text-secondary";
 
 // Shared expiry timer — used on both user and merchant order detail screens
 import { OrderExpiryTimer } from '@/components/shared/OrderExpiryTimer';
+import { MutualCancelAppealBanner } from '@/components/shared/MutualCancelAppealBanner';
+import { useOrderAppeal, isActiveAppeal } from '@/hooks/useOrderAppeal';
 
 /** Glossy animated expiry bar — sits at the card's bottom edge.
  *  Shrinks with time. Shimmers to attract attention. Pulses red when urgent. */
@@ -299,7 +302,7 @@ export interface OrderDetailScreenProps {
   respondToResolution: (action: "accept" | "reject") => void;
   isRespondingToResolution: boolean;
   // Cancel request
-  requestCancelOrder: (reason?: string) => void;
+  requestCancelOrder: (reason?: string) => Promise<boolean> | void;
   cancelOrderDirect: (reason?: string) => void;
   respondToCancelRequest: (accept: boolean) => void;
   isRequestingCancel: boolean;
@@ -406,6 +409,16 @@ export const OrderDetailScreen = ({
 }: OrderDetailScreenProps) => {
   // Suppress unused-param lint: `copied` is part of the prop API but not rendered here.
   void copied;
+
+  // Active-appeal state — drives hiding the "Raise Appeal" entries on the
+  // payment/tracker overlays once an appeal is open/proposed (the banner there
+  // carries the resolution actions instead).
+  const { appeal: odAppeal } = useOrderAppeal(activeOrder?.id, {
+    enabled: !["cancelled", "expired", "complete", "completed"].includes(
+      activeOrder?.status || "",
+    ),
+  });
+  const appealActive = isActiveAppeal(odAppeal);
   const [showEmojiPicker, setShowEmojiPicker] = useLocalState(false);
   const [showProfile, setShowProfile] = useLocalState(false);
   const [isUploading, setIsUploading] = useLocalState(false);
@@ -414,6 +427,32 @@ export const OrderDetailScreen = ({
   // Order receipt sheet — opened by tapping the summary card.
   const [showReceipt, setShowReceipt] = useLocalState(false);
   const [showTracker, setShowTracker] = useLocalState(false);
+  const cancel = useCancelOrderSheet();
+  // Stage-aware confirmation in front of the EXISTING cancel handlers. The
+  // resolver derives the dialog (direct vs mutual) from the live order; the
+  // handler passed in `run` is unchanged and still owns the backend routing,
+  // optimistic update and its own error alert. `after` runs only on success
+  // (e.g. closing the tracker/overview overlay), preserving prior navigation.
+  const openCancel = (run: () => Promise<unknown> | void, after?: () => void) => {
+    if (!activeOrder) return;
+    cancel.request(
+      {
+        type: activeOrder.type,
+        dbStatus: String(activeOrder.dbStatus || activeOrder.status || ""),
+        acceptedAt: activeOrder.acceptedAt,
+        paymentSentAt: activeOrder.paymentSentAt,
+        disputedAt: activeOrder.disputedAt,
+        cancelRequest: activeOrder.cancelRequest,
+        cryptoAmount: activeOrder.cryptoAmount,
+        cryptoCode: activeOrder.cryptoCode,
+      },
+      {
+        role: activeOrder.type === "sell" ? "seller" : "buyer",
+        onConfirm: async () => { await run(); },
+        onSuccess: after,
+      },
+    );
+  };
   // Chat popup: collapse the order-details (receipt) card by default so the
   // message area gets the full height. Toggled from the chat header.
   const [showOrderDetails, setShowOrderDetails] = useLocalState(false);
@@ -474,6 +513,25 @@ export const OrderDetailScreen = ({
   // details view). Opened directly by the "Order Overview" cards on the
   // payment & completed screens — one tap, no tracker hop in between.
   const [showOrderOverview, setShowOrderOverview] = useLocalState(false);
+
+  // Auto-dismiss the manually-opened order-info overlays (the ⓘ tracker and the
+  // Order Overview) the moment the order's status advances — e.g. the
+  // counterparty takes their turn while one is open. Without this the overlay
+  // sits stale on top of the now-updated screen and never reveals it ("doesn't
+  // remove, doesn't update"). Only the MANUAL flags are reset; the derived
+  // autoTracker (the primary screen for matching/unmatched states) is untouched,
+  // and the receipt sheet is left alone. Guarded on a ref so it fires ONLY on a
+  // real status/step transition — not on first mount, and not on unrelated
+  // order updates (unread counts, expiry ticks, cancel-request flags).
+  const orderProgressKey =
+    `${String(activeOrder?.dbStatus || activeOrder?.status || "")}:${String(activeOrder?.step ?? "")}`;
+  const prevProgressRef = useLocalRef(orderProgressKey);
+  useLocalEffect(() => {
+    if (prevProgressRef.current === orderProgressKey) return;
+    prevProgressRef.current = orderProgressKey;
+    setShowTracker(false);
+    setShowOrderOverview(false);
+  }, [orderProgressKey, setShowTracker, setShowOrderOverview]);
 
   // Receipt timestamps. Dates only — locale fixed to en-US for consistency
   // with the @/lib/format number rules.
@@ -1270,6 +1328,26 @@ export const OrderDetailScreen = ({
             </motion.div>
           )}
 
+        {/* Mutual-cancellation appeal — counterparty Agree/Reject (or requester
+            waiting). Self-hides unless an active mutual_cancel appeal exists. */}
+        {activeOrder.id && (
+          <MutualCancelAppealBanner
+            orderId={activeOrder.id}
+            viewerActorId={userId}
+            variant="user"
+            className="mb-4"
+            enabled={
+              !["cancelled", "expired", "complete", "completed", "disputed"].includes(
+                activeOrder.status || "",
+              )
+            }
+            // Real mode: route the seller's "Release" through the normal on-chain
+            // release flow (signs + completes); the appeal closes server-side.
+            onReleaseRequest={confirmFiatReceived}
+            onOpenChat={handleOpenChat}
+          />
+        )}
+
         {/* Inactivity Warning / Extension Sent / Extension Granted Banner */}
         {activeOrder.inactivityWarned &&
           activeOrder.status !== "disputed" &&
@@ -1499,16 +1577,16 @@ export const OrderDetailScreen = ({
           }
 
           return (
-            <div className={`mb-4 p-4 rounded-2xl ${AMBER_CARD}`}>
+            <div className="mb-4 p-4 rounded-2xl bg-surface-card border border-border-subtle">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-warning-dim flex-shrink-0">
-                  <AlertTriangle className="w-5 h-5 text-warning" />
+                <div className="w-10 h-10 rounded-full flex items-center justify-center bg-surface-raised border border-border-subtle flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-text-secondary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[15px] font-semibold text-warning">
+                  <p className="text-[15px] font-semibold text-text-primary">
                     Refund not yet received?
                   </p>
-                  <p className="text-[13px] text-warning mt-0.5">
+                  <p className="text-[13px] text-text-secondary mt-0.5">
                     We&apos;re still releasing your funds. Our system retries
                     automatically, but you can claim your refund now.
                   </p>
@@ -1818,9 +1896,10 @@ export const OrderDetailScreen = ({
                                 <motion.button
                                   whileTap={{ scale: 0.98 }}
                                   onClick={markPaymentSent}
-                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold ${PRIMARY_BTN}`}
+                                  disabled={isLoading}
+                                  className={`flex-[2] py-3 rounded-xl text-[15px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed ${PRIMARY_BTN}`}
                                 >
-                                  I&apos;m at the location
+                                  {isLoading ? "Processing..." : "I'm at the location"}
                                 </motion.button>
                               </div>
                             </>
@@ -2934,32 +3013,12 @@ export const OrderDetailScreen = ({
           </div>
           </div>
 
-          {/* Cancel button — ONLY pre-escrow (accepted / escrow_pending).
-              Nothing is locked yet, so this is a unilateral, instant cancel
-              via cancelOrderDirect (the /action CANCEL endpoint). Once escrow
-              is locked there is intentionally NO cancel button here — the
-              user raises an Appeal instead, and mutual cancellation is
-              resolved through that flow. Routing pre-escrow cancels through
-              the mutual cancel-request endpoint used to silently create a
-              merchant-approval request that never resolved. */}
-        {["accepted", "escrow_pending"].includes(
-          (activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),
-        ) &&
-          activeOrder.status !== "disputed" &&
-          !activeOrder.cancelRequest && (
-            <button
-              onClick={() => cancelOrderDirect()}
-              disabled={isRequestingCancel}
-              className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning hover:bg-warning-dim transition-colors`}
-            >
-              {isRequestingCancel ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <X className="w-4 h-4" />
-              )}
-              Cancel Order
-            </button>
-          )}
+          {/* No "Cancel Order" button once a merchant has accepted
+              (accepted / escrow_pending). Per product: cancel is only offered
+              BEFORE a merchant accepts (the matching phase) — afterwards the
+              only exits are Back (header) and Raise Appeal below. The unmatched
+              SELL "Cancel & Refund" path below is pre-accept (no merchant has
+              claimed yet), so it stays. */}
 
         {/* Cancel button for SELL orders waiting for a merchant (step 1).
             These have on-chain escrow locked by the user but no merchant
@@ -2972,7 +3031,7 @@ export const OrderDetailScreen = ({
           activeOrder.dbStatus === "escrowed" &&
           !activeOrder.cancelRequest && (
             <button
-              onClick={() => requestCancelOrder("Cancelled by seller — offer withdrawn")}
+              onClick={() => openCancel(() => requestCancelOrder("Cancelled by seller — offer withdrawn"))}
               disabled={isRequestingCancel}
               className={`w-full py-3 px-4 text-[13.5px] font-medium flex items-center justify-center gap-2 disabled:opacity-50 text-warning hover:bg-warning-dim transition-colors`}
             >
@@ -3049,7 +3108,7 @@ export const OrderDetailScreen = ({
             animate={{ opacity: 1 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setScreen("home")}
-            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-surface-raised border border-border-medium text-text-primary"
+            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-accent text-accent-text border border-transparent"
           >
             Done
           </motion.button>
@@ -3085,9 +3144,16 @@ export const OrderDetailScreen = ({
               onNeedHelp={() => setScreen("support")}
               onSubmit={submitAppeal}
               isSubmitting={isSubmittingAppeal}
-              onRequestCancel={() => {
-                setShowAppeal(false);
-                requestCancelOrder("Cancel & refund requested via appeal");
+              onRequestCancel={async () => {
+                // Keep the appeal screen (and its "Request Cancellation"
+                // spinner) up until the request actually resolves — closing it
+                // synchronously redirected to Order Details before the
+                // mutual-cancel request completed, hiding the loading state.
+                // requestCancelOrder drives isRequestingCancel (the spinner);
+                // we only leave the screen once it succeeds, so a slow/failed
+                // request keeps the user here to see the result or retry.
+                const ok = await requestCancelOrder("Cancel & refund requested via appeal");
+                if (ok) setShowAppeal(false);
               }}
               isRequestingCancel={isRequestingCancel}
             />
@@ -3112,14 +3178,6 @@ export const OrderDetailScreen = ({
               onViewProfile={() => setShowProfile(true)}
               onNeedHelp={() => setScreen("support")}
               onMarkPaymentSent={markPaymentSent}
-              onCancel={() => {
-                // The Cancel button on OrderPaymentScreen now renders ONLY
-                // pre-escrow (gated on !fundsLocked there), so this is always a
-                // unilateral, instant cancel — no crypto is locked yet. Once
-                // escrow is locked the screen shows Appeal instead, and mutual
-                // cancellation is resolved through the appeal flow.
-                cancelOrderDirect();
-              }}
               onAppeal={() => setShowAppeal(true)}
               onCopy={(key, value) => copyField(key, value)}
               copiedField={copiedField}
@@ -3127,7 +3185,21 @@ export const OrderDetailScreen = ({
               matchingPayMethods={matchingPayMethods}
               onChoosePayMethod={handleChoosePayMethod}
               isSubmitting={isLoading}
-              isCancelling={isRequestingCancel}
+              appealBanner={
+                <MutualCancelAppealBanner
+                  orderId={activeOrder.id}
+                  viewerActorId={userId}
+                  variant="user"
+                  enabled={
+                    !["cancelled", "expired", "complete", "completed", "disputed"].includes(
+                      activeOrder.status || "",
+                    )
+                  }
+                  // Buyer view: no release handler — a buyer can only escalate.
+                  onOpenChat={handleOpenChat}
+                />
+              }
+              appealActive={appealActive}
             />
           </div>
         )}
@@ -3154,6 +3226,22 @@ export const OrderDetailScreen = ({
               onConfirmReceived={confirmFiatReceived}
               onRaiseAppeal={() => setShowAppeal(true)}
               isConfirming={isLoading}
+              appealBanner={
+                <MutualCancelAppealBanner
+                  orderId={activeOrder.id}
+                  viewerActorId={userId}
+                  variant="user"
+                  enabled={
+                    !["cancelled", "expired", "complete", "completed", "disputed"].includes(
+                      activeOrder.status || "",
+                    )
+                  }
+                  // Seller: route "Release crypto to buyer" through the on-chain release flow.
+                  onReleaseRequest={confirmFiatReceived}
+                  onOpenChat={handleOpenChat}
+                />
+              }
+              appealActive={appealActive}
             />
           </div>
         )}
@@ -3285,12 +3373,14 @@ export const OrderDetailScreen = ({
                     s === "escrowed" ||
                     s === "payment_pending" ||
                     s === "payment_sent";
-                  if (escrowLocked) requestCancelOrder();
-                  else cancelOrderDirect();
-                  setShowTracker(false);
+                  openCancel(
+                    () => (escrowLocked ? requestCancelOrder() : cancelOrderDirect()),
+                    () => setShowTracker(false),
+                  );
                 }}
                 isCancelling={isRequestingCancel}
                 onOpenSupport={() => setScreen("support")}
+                onRetry={() => setScreen("trade")}
               />
             )}
           </motion.div>
@@ -3327,14 +3417,16 @@ export const OrderDetailScreen = ({
               onCancel={() => {
                 // Overview only exposes Cancel pre-escrow now (canCancel gates
                 // out any locked state), so this is always a unilateral cancel.
-                cancelOrderDirect();
-                setShowOrderOverview(false);
+                openCancel(() => cancelOrderDirect(), () => setShowOrderOverview(false));
               }}
               isCancelling={isRequestingCancel}
             />
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Stage-aware cancel confirmation (portaled above all order overlays). */}
+      {cancel.sheet}
 
       {/* Order Receipt Sheet — opened by tapping the summary card */}
       <AnimatePresence>

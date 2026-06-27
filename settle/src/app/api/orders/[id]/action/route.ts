@@ -159,9 +159,17 @@ export async function POST(
     __marks.push(__mark('order_fetch'));
 
     // 6. Access check (skip for ACCEPT/SEND_FIAT — observer is joining/claiming)
+    // Pass the order we already fetched above (getOrderWithRelations) so the
+    // access check reads the SAME row the action operates on. Without it,
+    // canAccessOrder re-fetches via getOrderById, which reads a SEPARATE cache
+    // key (`order:<id>` vs `order-full:<id>`). When those desync — e.g. an M2M
+    // buyer_merchant_id set on the full order but stale/NULL in the bare cache —
+    // the GET route grants access (renders "I've Paid") while this action 403s
+    // with "You do not have access to this order". Sharing the row removes both
+    // the desync and a duplicate query.
     const isClaimingOrder = ['ACCEPT', 'SEND_FIAT', 'CLAIM'].includes(action);
     if (!isClaimingOrder) {
-      const canAccess = await canAccessOrder(auth, id);
+      const canAccess = await canAccessOrder(auth, id, order);
       if (!canAccess) {
         logger.auth.forbidden(`POST /api/orders/${id}/action`, auth.actorId, 'Not order participant');
         return forbiddenResponse('You do not have access to this order');
@@ -817,14 +825,17 @@ export async function GET(
     const scopeErrGet = requireApiKeyScope(auth, 'orders:read');
     if (scopeErrGet) return scopeErrGet;
 
-    const canAccess = await canAccessOrder(auth, id);
-    if (!canAccess) {
-      return forbiddenResponse('You do not have access to this order');
-    }
-
+    // Fetch first, then check access against the SAME row (matches the POST
+    // handler + the main GET route) so the `order:` / `order-full:` caches
+    // can't desync into an access mismatch.
     const order = await getOrderWithRelations(id);
     if (!order) {
       return notFoundResponse('Order');
+    }
+
+    const canAccess = await canAccessOrder(auth, id, order);
+    if (!canAccess) {
+      return forbiddenResponse('You do not have access to this order');
     }
 
     // Determine actor ID from auth context (cryptographically-signed JWT).
