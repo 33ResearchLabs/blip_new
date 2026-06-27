@@ -449,11 +449,9 @@ export function WaitingTracker({
               whileTap={{ scale: 0.98 }}
               onClick={onCancel}
               disabled={isCancelling}
-              // Destructive-secondary, not the accent primary: on a waiting
-              // screen the loudest action must never be "destroy my order".
-              // Red is reserved for this single destructive control; the actual
-              // confirm + consequences live in CancelOrderSheet.
-              className="w-full py-4 rounded-2xl text-[16px] font-semibold border border-error-border text-error disabled:opacity-50 flex items-center justify-center gap-2"
+              // Solid accent pill (theme flip: black in light, white in dark).
+              // The actual confirm + consequences live in CancelOrderSheet.
+              className="w-full py-4 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
               {cancelLabel}

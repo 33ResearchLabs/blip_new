@@ -3108,7 +3108,7 @@ export const OrderDetailScreen = ({
             animate={{ opacity: 1 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => setScreen("home")}
-            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-surface-raised border border-border-medium text-text-primary"
+            className="w-full mt-4 py-4 rounded-2xl text-[17px] font-semibold bg-accent text-accent-text border border-transparent"
           >
             Done
           </motion.button>

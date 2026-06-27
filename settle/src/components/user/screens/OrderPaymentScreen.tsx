@@ -404,27 +404,8 @@ export function OrderPaymentScreen({
                 </div>
               )}
 
-              {/* Appeal */}
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  {paymentSent ? (
-                    <p className="text-[13px] text-text-secondary">
-                      Seller has up to <span className="font-semibold text-text-primary tabular-nums">{fmtCountdown(remainingSec)}</span> to confirm receipt of your payment.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-[13px] font-medium text-text-primary">Need help?</p>
-                      <p className="text-[12px] text-text-tertiary">You can appeal if you face any issues.</p>
-                    </>
-                  )}
-                </div>
-                <button
-                  onClick={onAppeal}
-                  className="shrink-0 px-4 py-2 rounded-xl text-[13px] font-semibold text-error border border-error-border hover:bg-error-dim"
-                >
-                  Appeal
-                </button>
-              </div>
+              {/* "Need help? / Appeal" was here — moved out to its own card
+                  directly below the Payment details card (see below). */}
             </>
           )}
         </div>
@@ -534,6 +515,35 @@ export function OrderPaymentScreen({
             </>
           )}
         </div>
+
+        {/* Need help? / Appeal — its own card directly below the Payment
+            details card (a sibling in the space-y-4 stack, so the inter-card
+            spacing matches the rest). Only shown once funds are locked, which
+            preserves the original visibility. Single horizontal row: copy on
+            the left (truncates via min-w-0), Appeal pinned right and vertically
+            centred with the heading. */}
+        {fundsLocked && (
+          <div className={`rounded-2xl p-4 flex items-center justify-between gap-3 ${CARD}`}>
+            <div className="min-w-0">
+              {paymentSent ? (
+                <p className="text-[13px] text-text-secondary">
+                  Seller has up to <span className="font-semibold text-text-primary tabular-nums">{fmtCountdown(remainingSec)}</span> to confirm receipt of your payment.
+                </p>
+              ) : (
+                <>
+                  <p className="text-[13px] font-semibold text-text-primary">Need help?</p>
+                  <p className="text-[12px] text-text-tertiary">You can appeal if you face any issues.</p>
+                </>
+              )}
+            </div>
+            <button
+              onClick={onAppeal}
+              className="shrink-0 px-4 py-2 rounded-xl text-[13px] font-semibold text-error border border-error-border hover:bg-error-dim"
+            >
+              Appeal
+            </button>
+          </div>
+        )}
 
         {/* Merchant card */}
         <div className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}>
@@ -647,9 +657,9 @@ export function OrderPaymentScreen({
               Raise Appeal, and Need help. Cancel is only offered BEFORE a
               merchant accepts (the matching phase). */}
           {/* Raise Appeal — available from acceptance onward. Once escrow is
-              locked the escrow-status card above renders its own inline Appeal,
-              so this bottom button only shows in the pre-lock (accepted /
-              escrow_pending) state to avoid a duplicate. */}
+              locked the "Need help?" card below the Payment details renders its
+              own inline Appeal, so this bottom button only shows in the pre-lock
+              (accepted / escrow_pending) state to avoid a duplicate. */}
           {!fundsLocked && !appealActive && (
             <button
               onClick={onAppeal}
