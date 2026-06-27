@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { MerchantErrorBoundary } from "./error-boundary";
 import { IssueReporter } from "@/components/IssueReporter";
 import { MerchantPresenceHeartbeat } from "@/components/merchant/MerchantPresenceHeartbeat";
+import { MerchantSessionRestore } from "@/components/merchant/MerchantSessionRestore";
 import { PwaAppGuard } from "@/components/PwaAppGuard";
 
 export const metadata: Metadata = {
@@ -42,6 +43,12 @@ export default function MerchantLayout({
 }) {
   return (
     <MerchantErrorBoundary>
+      {/* Restore the merchant session from the httpOnly cookie on a fresh load
+          so EVERY merchant sub-route gets its identity back on a hard refresh —
+          not just the pages that run useDashboardAuth. Without this, landing
+          directly on e.g. /market/chat left merchantId null and the inbox /
+          Pusher / realtime chat (all gated on merchantId) never loaded. */}
+      <MerchantSessionRestore />
       {/* Mount the presence heartbeat at the layout level so every
           merchant route (dashboard, wallet, settings, my-issues, …)
           keeps last_seen_at fresh. Previously only /merchant fired

@@ -3211,7 +3211,7 @@ export function OrderQuickView({
                 : `fixed z-50 inset-x-0 bottom-0 mx-auto w-full ${
                     isActiveOrder
                       ? "max-w-xl"
-                      : isAcceptableBuyOrder
+                      : isAcceptableBuyOrder || isOwnPendingBuy
                       ? "max-w-lg"
                       : "max-w-sm"
                   } lg:inset-x-auto lg:bottom-auto lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:w-[90%] max-h-[90dvh] flex flex-col overflow-hidden rounded-t-2xl lg:rounded-2xl shadow-2xl pb-safe lg:pb-0`
@@ -3908,7 +3908,7 @@ export function OrderQuickView({
                     onCancelOrderWithoutEscrow(selectedOrder.id);
                     onClose();
                   }}
-                  className="w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all bg-[var(--color-error)]/10 hover:bg-[var(--color-error)]/20 border-[var(--color-error)]/30 text-[var(--color-error)] disabled:opacity-50"
+                  className="w-full py-3 rounded-xl border font-semibold flex items-center justify-center gap-2 transition-all bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.12] text-[#f5f5f7] disabled:opacity-50"
                 >
                   {cancellingOrderId === selectedOrder.id ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -4026,8 +4026,12 @@ export function OrderQuickView({
                     : "bg-white/[0.06] hover:bg-white/[0.08] border-white/[0.12] hover:border-white/[0.12] text-[#f5f5f7]";
                   const PRIMARY_LOADING =
                     "bg-white/[0.06] border-white/[0.12] text-[#f5f5f7]/50 cursor-wait";
+                  // Cancel is the only action that reaches this secondary slot
+                  // (DISPUTE is filtered out above and surfaced as "Raise
+                  // Appeal"), so it gets the neutral treatment — destructive red
+                  // is reserved for disputes elsewhere.
                   const SECONDARY_STYLE =
-                    "bg-red-500/10 hover:bg-[var(--color-error)]/20 border-red-500/30 hover:border-[var(--color-error)]/40 text-red-400";
+                    "bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.12] text-[#f5f5f7]";
                   const DISABLED_STYLE =
                     "bg-foreground/[0.04] border-foreground/[0.06] text-foreground/40 cursor-not-allowed";
 

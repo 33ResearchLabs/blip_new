@@ -58,6 +58,7 @@ import {
   Smile,
   LifeBuoy,
   CircleDollarSign,
+  Flag,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { openIssueReporter } from "@/components/IssueReporter";
@@ -85,6 +86,8 @@ import { MOCK_MODE } from "@/lib/config/mockMode";
 import { EscrowLockModal } from "@/components/merchant/EscrowLockModal";
 import { EscrowReleaseModal } from "@/components/merchant/EscrowReleaseModal";
 import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
+import { MerchantAppealSheet } from "@/components/merchant/MerchantAppealSheet";
+import { useOrderAppeal, isActiveAppeal } from "@/hooks/useOrderAppeal";
 import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
 
 /* ───────────────────────── helpers ───────────────────────── */
@@ -1314,6 +1317,20 @@ function TradeDetailsPane({
   const ccy = order?.fiat_currency ?? convo.fiat_currency;
   const rate = order?.rate;
 
+  // Raise-Appeal entry point. Mirrors OrderQuickView: the merchant can open an
+  // appeal once the trade is accepted (accepted / escrowed / payment_sent) and
+  // no appeal is already active. Opening one pauses the auto-cancel timers and
+  // starts the peer-resolution flow. `appealOrderId` falls back to the convo
+  // snapshot so the hook works before the live order loads.
+  const appealOrderId = order?.id ?? convo.order_id;
+  const { appeal, refetch: refetchAppeal } = useOrderAppeal(appealOrderId, {
+    enabled: !!appealOrderId,
+  });
+  const appealActive = isActiveAppeal(appeal);
+  const showAppeal =
+    ["accepted", "escrowed", "payment_sent"].includes(status) && !appealActive;
+  const [appealSheetOpen, setAppealSheetOpen] = useState(false);
+
   // Backend-driven buttons (never computed on the frontend). primaryAction is
   // always present; secondaryAction may be null.
   const buttons: {
@@ -1498,6 +1515,20 @@ function TradeDetailsPane({
               Accepting a trade opens the dashboard for wallet signing.
             </p>
           )}
+
+          {/* Raise Appeal — available once the trade is accepted and no appeal
+              is already active. Opens the merchant appeal sheet (same endpoint /
+              flow as the dashboard quick-view). */}
+          {showAppeal && (
+            <button
+              type="button"
+              onClick={() => setAppealSheetOpen(true)}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-white/12 text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-sm transition-colors"
+            >
+              <Flag className="w-4 h-4" />
+              Raise Appeal
+            </button>
+          )}
         </div>
 
         {/* settlement note */}
@@ -1538,6 +1569,22 @@ function TradeDetailsPane({
             {body}
           </aside>
         </>
+      )}
+
+      {/* Merchant Raise-Appeal sheet — fixed overlay (z-[150]). On submit, refresh
+          the appeal (hides the button, surfaces the mutual-cancel banner) and the
+          order so its actions reflect the paused timers. */}
+      {appealSheetOpen && appealOrderId && (
+        <MerchantAppealSheet
+          orderId={appealOrderId}
+          orderStatus={status}
+          displayId={order?.order_number ?? convo.order_number}
+          onClose={() => setAppealSheetOpen(false)}
+          onSubmitted={() => {
+            void refetchAppeal();
+            onAppealResolved();
+          }}
+        />
       )}
     </>
   );

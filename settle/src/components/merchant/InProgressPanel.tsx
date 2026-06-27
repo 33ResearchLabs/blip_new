@@ -762,7 +762,7 @@ export const InProgressPanel = memo(function InProgressPanel({
             tab style. Disputed is intentionally absent (never an active trade). */}
         {!collapsed && (
           <div
-            className="inline-flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] shrink-0"
+            className="inline-flex items-center gap-0.5 h-7 xl:h-8 [@media(min-height:900px)]:h-8 p-0.5 rounded-lg bg-foreground/[0.04] border border-foreground/[0.06] max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {[
@@ -774,7 +774,7 @@ export const InProgressPanel = memo(function InProgressPanel({
               <button
                 key={key}
                 onClick={() => setStatusFilter(key as "all" | MinimalStatus)}
-                className={`h-full px-3 inline-flex items-center rounded-md text-[11px] font-bold transition-all ${
+                className={`h-full px-3 inline-flex items-center rounded-md text-[11px] font-bold transition-all shrink-0 ${
                   statusFilter === key
                     ? "bg-white/[0.08] text-white/90 border border-white/[0.12]"
                     : "text-foreground/35 hover:text-foreground/60 border border-transparent"
