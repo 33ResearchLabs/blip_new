@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  Bell,
   ChevronRight,
   Copy,
   Check,
@@ -368,17 +369,38 @@ export const RewardsScreen = ({
 
   return (
     <div className="relative flex flex-col h-dvh overflow-hidden bg-surface-base">
-      {/* ── Scrollable body ──
-          The plain title header was replaced by the Refer & Earn hero banner
-          (which carries the title + notification bell), matching the design
-          reference. This stays a tab-style screen with the persistent
-          BottomNav below. ── */}
-      <div className="flex-1 px-5 pt-4 pb-28 overflow-y-auto scrollbar-hide">
+      {/* ── Header — big title + notification bell, OUTSIDE the cards. This is a
+              tab-style screen with the persistent BottomNav below, matching the
+              Notifications screen pattern. ── */}
+      <header className="px-5 pt-4 pb-4 shrink-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[26px] font-extrabold tracking-[-0.03em] text-text-primary leading-none">
+            Refer &amp; Earn
+          </p>
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={() => setScreen("notifications")}
+            aria-label="Notifications"
+            className="relative shrink-0 w-9 h-9 rounded-[14px] flex items-center justify-center bg-surface-card border border-border-subtle"
+          >
+            <Bell className="w-[18px] h-[18px] text-text-tertiary" strokeWidth={2} />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-text-primary border-2 border-surface-base flex items-center justify-center">
+                <span className="text-[8px] font-extrabold leading-none text-surface-base">
+                  {notificationCount > 9 ? "9+" : notificationCount}
+                </span>
+              </span>
+            )}
+          </motion.button>
+        </div>
+      </header>
+
+      {/* ── Scrollable body ── */}
+      <div className="flex-1 px-5 pb-28 overflow-y-auto scrollbar-hide">
         <div className="mx-auto w-full max-w-[440px] md:max-w-[min(1100px,97vw)]">
-          {/* ── 0. Hero banner ── */}
+          {/* ── 0. Refer & Earn promo card ── */}
           <RewardsHeroBanner
-            onNotificationsClick={() => setScreen("notifications")}
-            notificationCount={notificationCount}
+            className="mt-4"
             onPrimary={handleCopyLink}
             secondaryLabel={onLearnMore ? "How it works" : null}
             onSecondary={onLearnMore}
