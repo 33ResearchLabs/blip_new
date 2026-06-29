@@ -31,6 +31,17 @@ jest.mock('@/lib/orders/stateMachineMinimal', () => ({
   validateTransition: (...a: unknown[]) => mockValidateTransition(...a),
 }));
 
+// MOCK_MODE is the gate for the DB-cache refund credit: mock mode credits the
+// cache (no chain → DB is authoritative); real mode skips it (on-chain is the
+// source of truth). Default to mock mode so the credit-path tests below exercise
+// the credit; the real-mode block flips this to false. Reset in beforeEach.
+let mockModeValue = true;
+jest.mock('settlement-core', () => ({
+  get MOCK_MODE() {
+    return mockModeValue;
+  },
+}));
+
 import { atomicFinalizeDispute } from '@/lib/orders/atomicFinalizeDispute';
 
 const COMPLIANCE = { id: 'comp-42', name: 'Audit Bot', role: 'compliance' };
@@ -160,6 +171,7 @@ const buyOrderMerchantSeller = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockValidateTransition.mockReturnValue({ valid: true });
+  mockModeValue = true; // default: mock mode (credits the DB cache)
 });
 
 describe('refund target — credits escrow_debited_entity_id, never merchant_id', () => {
@@ -644,7 +656,7 @@ describe('ledger invariant post-condition (Patch A — system-level conservation
     const state: ClientState = {
       orderRow: sellOrderUserSeller,
       balance: 500,
-      ledgerLockTotal: 100,
+      ledgerLockTotal: -100, // ESCROW_LOCK is stored as a negative debit (escrowLock.ts inserts -amount); conservation is lock+release+refund===0
       ledgerReleaseTotal: 0,
       ledgerRefundTotal: 100,
     };
@@ -678,7 +690,7 @@ describe('ledger invariant post-condition (Patch A — system-level conservation
     const state: ClientState = {
       orderRow: sellOrderUserSeller,
       balance: 500,
-      ledgerLockTotal: 100,
+      ledgerLockTotal: -100, // ESCROW_LOCK is stored as a negative debit (escrowLock.ts inserts -amount); conservation is lock+release+refund===0
       ledgerReleaseTotal: 0,
       ledgerRefundTotal: 0,
     };
@@ -701,7 +713,7 @@ describe('ledger invariant post-condition (Patch A — system-level conservation
     const state: ClientState = {
       orderRow: sellOrderUserSeller,
       balance: 500,
-      ledgerLockTotal: 100,
+      ledgerLockTotal: -100, // ESCROW_LOCK is stored as a negative debit (escrowLock.ts inserts -amount); conservation is lock+release+refund===0
       ledgerReleaseTotal: 50,
       ledgerRefundTotal: 50,
     };
@@ -720,7 +732,7 @@ describe('ledger invariant post-condition (Patch A — system-level conservation
     const state: ClientState = {
       orderRow: sellOrderUserSeller,
       balance: 500,
-      ledgerLockTotal: 100,
+      ledgerLockTotal: -100, // ESCROW_LOCK is stored as a negative debit (escrowLock.ts inserts -amount); conservation is lock+release+refund===0
       ledgerReleaseTotal: 0,
       ledgerRefundTotal: 200,
     };
@@ -779,5 +791,71 @@ describe('ledger invariant post-condition (Patch A — system-level conservation
     expect(captured.find(c =>
       c.text.includes('SELECT entry_type') && c.text.includes('FROM ledger_entries')
     )).toBeUndefined();
+  });
+});
+
+describe('real mode — refund does NOT credit the DB cache (on-chain is source of truth)', () => {
+  test('resolution=merchant in real mode → status flips + ledger ESCROW_REFUND written, but NO balance UPDATE (no phantom credit)', async () => {
+    mockModeValue = false; // real (on-chain) mode — mirrors atomicCancel's MOCK_MODE gate
+    const state: ClientState = {
+      orderRow: sellOrderUserSeller,
+      balance: 500,
+      ledgerLockTotal: -100,
+      ledgerReleaseTotal: 0,
+      ledgerRefundTotal: 100,
+    };
+    let captured: { text: string; params: unknown[] }[] = [];
+    mockTransaction.mockImplementation(async (cb: any) => {
+      const c = createClient(state);
+      const out = await cb(c);
+      captured = c.calls;
+      return out;
+    });
+
+    const r = await atomicFinalizeDispute({
+      orderId: 'order-sell-1',
+      resolution: 'merchant',
+      complianceMember: COMPLIANCE,
+    });
+
+    expect(r.success).toBe(true);
+    // The phantom-credit source: in real mode the DB cache is NOT credited.
+    expect(captured.find(c => /SET balance = balance \+/.test(c.text))).toBeUndefined();
+    // ...but the ledger ESCROW_REFUND audit row is still written (conservation intact),
+    expect(captured.find(c => c.text.includes('INSERT INTO ledger_entries'))).toBeTruthy();
+    // ...and the order status still flips atomically.
+    expect(captured.find(c =>
+      /^\s*UPDATE orders/.test(c.text) && c.text.includes('RETURNING *')
+    )).toBeTruthy();
+  });
+
+  test('mock mode still credits the DB cache (no chain → DB is authoritative)', async () => {
+    mockModeValue = true;
+    const state: ClientState = {
+      orderRow: sellOrderUserSeller,
+      balance: 500,
+      ledgerLockTotal: -100,
+      ledgerReleaseTotal: 0,
+      ledgerRefundTotal: 100,
+    };
+    let captured: { text: string; params: unknown[] }[] = [];
+    mockTransaction.mockImplementation(async (cb: any) => {
+      const c = createClient(state);
+      const out = await cb(c);
+      captured = c.calls;
+      return out;
+    });
+
+    const r = await atomicFinalizeDispute({
+      orderId: 'order-sell-1',
+      resolution: 'merchant',
+      complianceMember: COMPLIANCE,
+    });
+
+    expect(r.success).toBe(true);
+    // Mock mode: the DB cache IS credited (unchanged from prior behavior).
+    expect(captured.find(c =>
+      /UPDATE\s+users\s+SET balance = balance \+/.test(c.text)
+    )).toBeTruthy();
   });
 });

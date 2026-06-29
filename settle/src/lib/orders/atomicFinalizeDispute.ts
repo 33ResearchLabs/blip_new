@@ -51,14 +51,6 @@ import {
 
 export type DisputeResolution = 'user' | 'merchant' | 'split';
 
-// Bug B (dispute double-credit) fix — OFF by default, so default behavior is
-// byte-for-byte unchanged. When DISPUTE_DOUBLE_CREDIT_FIX=true, the merchant-
-// refund resolution skips the DB-cache credit ONLY when an on-chain refund was
-// already recorded (refundTxHash) in real mode — exactly the double-credit case.
-// It never skips without an on-chain refund, so a legitimate refund can't be lost.
-const DISPUTE_DOUBLE_CREDIT_FIX =
-  (process.env.DISPUTE_DOUBLE_CREDIT_FIX || '').toLowerCase() === 'true';
-
 export interface ComplianceMemberRef {
   id: string;
   name: string;
@@ -181,23 +173,22 @@ export async function atomicFinalizeDispute(
           }
           const balanceBefore = parseFloat(String(balRes.rows[0].balance));
 
-          // ── Bug B (double-credit) guard ──────────────────────────────────
-          // In real mode, if compliance already refunded the seller ON-CHAIN
-          // (refundTxHash recorded), crediting the DB cache here too would
-          // double-count the refund. When the fix flag is on we skip the cache
-          // credit in exactly that case — the chain is the source of truth and
-          // the balance reconciler syncs the cache. We NEVER skip unless an
-          // on-chain refund is recorded, so a legitimate refund can't be lost.
-          // MOCK_MODE always credits (no chain → DB is authoritative); flag off
-          // keeps the prior always-credit behavior unchanged.
-          const skipCacheCredit =
-            DISPUTE_DOUBLE_CREDIT_FIX && !MOCK_MODE && !!refundTxHash;
+          // ── Real mode: on-chain is the source of truth ───────────────────
+          // The DB `balance` column is only authoritative in MOCK_MODE (no
+          // chain). In real mode the escrow refund happens ON-CHAIN — done by
+          // compliance with an arbiter wallet and recorded via refund_tx_hash —
+          // and the balance reconciler syncs the cache from chain. Crediting the
+          // DB cache here in real mode would create a PHANTOM balance that never
+          // matches the wallet (the bug this fixes). Mirror atomicCancel
+          // (`if (MOCK_MODE && hadEscrow)`): credit the DB cache ONLY in mock
+          // mode. The ledger_entries audit row below is written in both modes.
+          const skipCacheCredit = !MOCK_MODE;
 
           let balanceAfter = balanceBefore;
           if (skipCacheCredit) {
             logger.info(
-              '[Atomic] Dispute finalize — skipped DB cache credit; on-chain refund already recorded (avoids double-credit)',
-              { orderId, refundTxHash, entityId: resolved.entityId, amount: resolved.amount }
+              '[Atomic] Dispute finalize — DB cache credit skipped in real mode; on-chain refund is source of truth (reconciler syncs cache)',
+              { orderId, refundTxHash: refundTxHash ?? null, entityId: resolved.entityId, amount: resolved.amount }
             );
           } else {
             await client.query(
