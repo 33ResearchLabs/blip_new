@@ -1367,13 +1367,25 @@ export default function MerchantDashboard() {
               <div className="border-b border-white/[0.06]" style={{ paddingTop: "2%" }}>
                 <div className="flex items-center justify-between px-4 h-[49px]">
                   <span className="text-[19px] font-semibold text-white tracking-[-0.01em]">Notifications</span>
-                  <button
-                    onClick={() => setShowNotifications(false)}
-                    className="w-8 h-8 rounded-full flex items-center justify-center"
-                    style={{ color: "#aeaeb2", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)" }}
-                  >
-                    <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {notifications.some((n) => !n.read) && (
+                      <button
+                        onClick={markAllNotificationsRead}
+                        className="flex items-center gap-1 pl-2 pr-2.5 h-8 rounded-full text-[12px] font-semibold"
+                        style={{ color: "#aeaeb2", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)" }}
+                      >
+                        <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                        Mark all read
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowNotifications(false)}
+                      className="w-8 h-8 rounded-full flex items-center justify-center"
+                      style={{ color: "#aeaeb2", background: "rgba(255,255,255,0.055)", border: "1px solid rgba(255,255,255,0.09)" }}
+                    >
+                      <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="flex-1 min-h-0 flex flex-col">
