@@ -28,6 +28,7 @@ import {
 } from "@/lib/orders/mappers";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useOrderFetching } from "@/hooks/useOrderFetching";
+import { useRealtimeResync } from "@/hooks/useRealtimeResync";
 import { useDashboardAuth } from "@/hooks/useDashboardAuth";
 import { useEscrowOperations } from "@/hooks/useEscrowOperations";
 import { useDisputeHandlers } from "@/hooks/useDisputeHandlers";
@@ -130,6 +131,27 @@ export default function MerchantDashboard() {
   // popup. Routed by `handleMobileSelectOrder` below; desktop never sets this.
   const [mobileOrderDetail, setMobileOrderDetail] = useState<Order | null>(
     null,
+  );
+  // C4 — keep the open popup/detail in sync with LIVE order state. The state
+  // above is the snapshot captured when the order was opened (it also tracks
+  // "is the popup open + which id"); but realtime/poll updates land in the store
+  // `orders` list, not in that snapshot. Re-derive the order to render from the
+  // store each render so an open popup reflects status/action changes (and shows
+  // the right buttons) instead of frozen, stale ones. Falls back to the snapshot
+  // for orders not in the current feed (e.g. compliance deep-links fetched ad hoc).
+  const livePopupOrder = useMemo(
+    () =>
+      selectedOrderPopup
+        ? orders.find((o) => o.id === selectedOrderPopup.id) ?? selectedOrderPopup
+        : null,
+    [orders, selectedOrderPopup],
+  );
+  const liveMobileDetail = useMemo(
+    () =>
+      mobileOrderDetail
+        ? orders.find((o) => o.id === mobileOrderDetail.id) ?? mobileOrderDetail
+        : null,
+    [orders, mobileOrderDetail],
   );
   // Routes a mobile order tap to the right presentation. Mirrors OrderQuickView's
   // `isActiveOrder` gate: merchant is a party (seller/buyer) AND status is past
@@ -598,6 +620,17 @@ export default function MerchantDashboard() {
       fetchOrderConversations,
       autoRefundEscrow,
     });
+
+  // C6 / realtime sync — when realtime may have missed events (Pusher reconnect,
+  // tab becomes visible again, or network comes back online), pull fresh orders
+  // AND conversations so the merchant never acts on stale state. The order LIST
+  // previously had no reconnect/online refetch — this closes that gap. Reads are
+  // debounced/deduped, so the small overlap with useOrderFetching's own
+  // visibility handler is harmless. Does not fire on initial mount.
+  useRealtimeResync(() => {
+    fetchOrders();
+    debouncedFetchConversations();
+  });
 
   const { chatWindows, openChat, closeChat, sendMessage, sendTypingIndicator } =
     useWebSocketChat({
@@ -1483,9 +1516,9 @@ export default function MerchantDashboard() {
           handleCreateTrade={handleCreateTrade}
           activeCorridor={activeCorridor}
           onCorridorChange={setActiveCorridor}
-          selectedOrderPopup={selectedOrderPopup}
+          selectedOrderPopup={livePopupOrder}
           setSelectedOrderPopup={setSelectedOrderPopup}
-          mobileOrderDetail={mobileOrderDetail}
+          mobileOrderDetail={liveMobileDetail}
           setMobileOrderDetail={setMobileOrderDetail}
           markingDone={markingDone}
           acceptingOrderId={acceptingOrderId}

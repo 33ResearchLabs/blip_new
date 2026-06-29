@@ -796,7 +796,7 @@ export default function TradeChatPage() {
                     {activeWindow ? "No messages yet — say hello." : <Loader2 className="w-5 h-5 animate-spin" />}
                   </div>
                 ) : (
-                  <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} viewerRole={order?.my_role === "buyer" || order?.my_role === "seller" ? order.my_role : null} />
+                  <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} viewerRole={order?.my_role === "buyer" || order?.my_role === "seller" ? order.my_role : null} onRetry={(id) => chat.retryMessage(activeWindow.id, id)} />
                 )}
               </div>
 
@@ -1112,10 +1112,12 @@ function MessageStream({
   messages,
   status,
   viewerRole,
+  onRetry,
 }: {
   messages: ChatMessage[];
   status: string;
   viewerRole?: "buyer" | "seller" | null;
+  onRetry?: (messageId: string) => void;
 }) {
   const out: ReactNode[] = [];
   let lastDay = "";
@@ -1132,7 +1134,7 @@ function MessageStream({
         </div>,
       );
     }
-    out.push(<MessageItem key={m.id} m={m} status={status} viewerRole={viewerRole} />);
+    out.push(<MessageItem key={m.id} m={m} status={status} viewerRole={viewerRole} onRetry={onRetry} />);
   }
   return <>{out}</>;
 }
@@ -1141,10 +1143,12 @@ function MessageItem({
   m,
   status,
   viewerRole,
+  onRetry,
 }: {
   m: ChatMessage;
   status: string;
   viewerRole?: "buyer" | "seller" | null;
+  onRetry?: (messageId: string) => void;
 }) {
   // Rich receipt cards (Payment Sent / Trade Completed) when the message
   // carries structured receipt data.
@@ -1212,6 +1216,17 @@ function MessageItem({
               <CheckCheck className="w-3 h-3" />
             ) : m.status === "sending" ? (
               <Loader2 className="w-3 h-3 animate-spin" />
+            ) : m.status === "failed" ? (
+              <button
+                type="button"
+                onClick={() => onRetry?.(m.id)}
+                title="Not delivered — tap to retry"
+                aria-label="Message failed to send. Tap to retry."
+                className="flex items-center gap-0.5 text-error"
+              >
+                <AlertTriangle className="w-3 h-3" />
+                <span className="text-[9px] underline">Retry</span>
+              </button>
             ) : (
               <Check className="w-3 h-3" />
             ))}

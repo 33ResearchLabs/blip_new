@@ -52,7 +52,7 @@ export interface ChatViewScreenProps {
       receiptData?: Record<string, unknown> | null;
       imageUrl?: string | null;
       isRead?: boolean;
-      status?: 'sending' | 'sent' | 'delivered' | 'read';
+      status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
     }>;
   } | null;
   chatMessage: string;

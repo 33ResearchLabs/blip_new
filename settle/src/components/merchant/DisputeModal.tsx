@@ -37,7 +37,7 @@ export function DisputeModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
-            onClick={() => onClose()}
+            onClick={() => { if (!isSubmittingDispute) onClose(); }}
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -58,7 +58,7 @@ export function DisputeModal({
                   </div>
                 </div>
                 <button
-                  onClick={() => onClose()}
+                  onClick={() => { if (!isSubmittingDispute) onClose(); }}
                   className="p-2 hover:bg-card rounded-lg transition-colors"
                 >
                   <X className="w-4 h-4 text-foreground/35" />
@@ -92,7 +92,7 @@ export function DisputeModal({
                   <label className="text-xs text-foreground/35 uppercase tracking-wide mb-2 block">Description</label>
                   <textarea
                     value={disputeDescription}
-                    onChange={(e) => setDisputeDescription(e.target.value.slice(0, 1000))}
+                    onChange={(e) => setDisputeDescription(e.target.value)}
                     placeholder="Describe the issue in detail..."
                     rows={3}
                     maxLength={1000}
@@ -105,7 +105,7 @@ export function DisputeModal({
               {/* Footer */}
               <div className="px-5 pb-5 flex gap-3">
                 <button
-                  onClick={() => onClose()}
+                  onClick={() => { if (!isSubmittingDispute) onClose(); }}
                   className="flex-1 py-3 rounded-xl text-xs font-medium bg-white/[0.04] hover:bg-accent-subtle transition-colors"
                 >
                   Cancel

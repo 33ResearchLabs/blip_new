@@ -33,6 +33,15 @@ export interface MerchantStoreState {
   isLoggedIn: boolean;
   isLoading: boolean;
 
+  // ─── Orders fetch state (Loading / Success / Empty / Error separation) ───
+  // `isLoading` alone cannot distinguish "still fetching" from "loaded, empty"
+  // from "fetch failed". These let list views render a real Error+Retry state
+  // instead of a misleading "No orders" empty state on a failed request.
+  // `ordersError` holds the last user-readable fetch error (null when healthy);
+  // `ordersLoaded` flips true once a fetch has completed at least once.
+  ordersError: string | null;
+  ordersLoaded: boolean;
+
   // ─── Payment methods (preloaded at dashboard load) ───
   // Single source of truth so the trade modal opens already populated
   // instead of fetching on open. `paymentMethodsLoaded` lets consumers tell
@@ -75,6 +84,9 @@ export interface MerchantStoreState {
   setMerchantInfo: (infoOrFn: any | null | ((prev: any | null) => any | null)) => void;
   setIsLoggedIn: (v: boolean) => void;
   setIsLoading: (v: boolean) => void;
+  /** Set the last orders-fetch error (null clears it). Also marks ordersLoaded. */
+  setOrdersError: (e: string | null) => void;
+  setOrdersLoaded: (v: boolean) => void;
 
   // ─── Payment method actions ────────────────────────
   setPaymentMethods: (m: MerchantPaymentMethod[]) => void;
@@ -102,6 +114,8 @@ export const useMerchantStore = create<MerchantStoreState>()(
     merchantInfo: null,
     isLoggedIn: false,
     isLoading: true,
+    ordersError: null,
+    ordersLoaded: false,
     sessionToken: null,
     paymentMethods: [],
     paymentMethodsLoaded: false,
@@ -165,6 +179,8 @@ export const useMerchantStore = create<MerchantStoreState>()(
     },
     setIsLoggedIn: (v) => set({ isLoggedIn: v }),
     setIsLoading: (v) => set({ isLoading: v }),
+    setOrdersError: (e) => set({ ordersError: e, ordersLoaded: true }),
+    setOrdersLoaded: (v) => set({ ordersLoaded: v }),
 
     // ─── Payment method actions ────────────────────────
     setPaymentMethods: (m) => set({ paymentMethods: m, paymentMethodsLoaded: true }),
