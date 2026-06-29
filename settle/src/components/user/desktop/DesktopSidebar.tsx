@@ -16,6 +16,12 @@ import type { Screen } from "@/components/user/screens/types";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { formatCrypto } from "@/lib/format";
 
+// Mirror HomeScreen's gate verbatim: in mock mode the balance comes from the DB
+// cache (userBalance); in real (on-chain) mode it comes from the live Solana
+// wallet. Keeping these identical is what stops the sidebar drifting from the
+// home screen (e.g. after a dispute refund credits the DB cache but not chain).
+const IS_MOCK_MODE = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
+
 interface DesktopSidebarProps {
   screen: Screen;
   setScreen: (s: Screen) => void;
@@ -23,6 +29,10 @@ interface DesktopSidebarProps {
   userAvatar: string | null;
   userId: string | null;
   userBalance?: number;
+  /** Live on-chain wallet balance (real mode). Used instead of the DB-cache
+   *  userBalance whenever IS_MOCK_MODE is false, mirroring HomeScreen so the
+   *  sidebar and home screen always show the same number. */
+  solanaWallet?: { connected: boolean; usdtBalance: number | null };
   notificationCount?: number;
   chatUnreadCount?: number;
 }
@@ -41,9 +51,22 @@ export function DesktopSidebar({
   userAvatar,
   userId,
   userBalance,
+  solanaWallet,
   notificationCount = 0,
   chatUnreadCount = 0,
 }: DesktopSidebarProps) {
+  // Sidebar balance must equal the home-screen balance. Real mode → on-chain
+  // Solana balance; mock mode → DB cache (userBalance). Mirrors HomeScreen's
+  // displayBalance / isWalletReady so the two views can never disagree. This is
+  // display-only — no financial logic reads this value.
+  const displayBalance = IS_MOCK_MODE
+    ? userBalance
+    : solanaWallet?.usdtBalance ?? undefined;
+  const balanceReady = IS_MOCK_MODE
+    ? typeof userBalance === "number"
+    : Boolean(solanaWallet?.connected) &&
+      typeof solanaWallet?.usdtBalance === "number";
+
   const navItems: NavItem[] = [
     { key: "home", label: "Home", icon: <Home size={18} strokeWidth={1.9} /> },
     { key: "trade", label: "Trade", icon: <Send size={18} strokeWidth={1.9} /> },
@@ -97,7 +120,7 @@ export function DesktopSidebar({
       </div>
 
       {/* Balance pill */}
-      {typeof userBalance === "number" && (
+      {balanceReady && typeof displayBalance === "number" && (
         <div
           style={{
             margin: "0 12px 20px",
@@ -111,7 +134,7 @@ export function DesktopSidebar({
             Balance
           </div>
           <div style={{ fontSize: 18, fontWeight: 700, color: "#fff" }}>
-            {formatCrypto(userBalance)} <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontWeight: 500 }}>USDT</span>
+            {formatCrypto(displayBalance)} <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", fontWeight: 500 }}>USDT</span>
           </div>
         </div>
       )}
