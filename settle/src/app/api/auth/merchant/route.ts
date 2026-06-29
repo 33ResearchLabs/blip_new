@@ -12,6 +12,7 @@ import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 import { trackRequest, checkDeviceChangeFrequency } from '@/lib/risk/tracker';
 import { defaultAvatarUrl } from '@/lib/avatars';
 import { setupWaitlistForActor } from '@/lib/waitlist/signup';
+import { sanitizeCorridorIds, sanitizePaymentMethodValues } from '@/lib/waitlist/onboardingOptions';
 import { validateFingerprintPayload, persistFingerprintAsync } from '@/lib/threat/devicePersist';
 import { validateBehaviorPayload, persistBehaviorAsync } from '@/lib/threat/behaviorPersist';
 import { triggerRecompute } from '@/lib/threat/recompute';
@@ -1146,6 +1147,8 @@ export async function POST(request: NextRequest) {
         ? expectedVolumeRaw
         : null;
       const countryCode = typeof body?.country_code === 'string' ? body.country_code.trim().toUpperCase().slice(0, 8) : null;
+      const tradeCorridors = sanitizeCorridorIds(body?.trade_corridors);
+      const intendedPaymentMethods = sanitizePaymentMethodValues(body?.intended_payment_methods);
 
       // Create merchant (auto-funded in mock mode, email NOT verified)
       const regBalance = MOCK_MODE ? MOCK_INITIAL_BALANCE : 0;
@@ -1162,8 +1165,10 @@ export async function POST(request: NextRequest) {
           avatar_url,
           business_category,
           expected_monthly_volume_usd,
-          country_code
-        ) VALUES ($1, $2, $3, $4, 'active', true, $5, false, $6, $7, $8, $9)
+          country_code,
+          trade_corridors,
+          intended_payment_methods
+        ) VALUES ($1, $2, $3, $4, 'active', true, $5, false, $6, $7, $8, $9, $10, $11)
         RETURNING id, username, display_name, business_name, wallet_address, email, rating, total_trades`,
         [
           normalizedEmail,
@@ -1175,6 +1180,8 @@ export async function POST(request: NextRequest) {
           businessCategory,
           expectedVolume,
           countryCode,
+          tradeCorridors,
+          intendedPaymentMethods,
         ]
       );
 

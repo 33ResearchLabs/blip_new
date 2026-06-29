@@ -35,6 +35,8 @@ interface ActorPayload {
   business_category: string | null;
   expected_monthly_volume_usd: number | null;
   country_code: string | null;
+  trade_corridors: string[] | null;
+  intended_payment_methods: string[] | null;
 }
 
 const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -206,7 +208,9 @@ async function loadActor(at: ActorType, id: string): Promise<ActorPayload | null
               NULL::text AS business_name,
               NULL::text AS business_category,
               NULL::numeric AS expected_monthly_volume_usd,
-              NULL::text AS country_code
+              NULL::text AS country_code,
+              NULL::text[] AS trade_corridors,
+              NULL::text[] AS intended_payment_methods
          FROM users WHERE id = $1`,
       [id],
     );
@@ -222,7 +226,9 @@ async function loadActor(at: ActorType, id: string): Promise<ActorPayload | null
             waitlist_source, blip_points, referral_code,
             business_name, business_category,
             expected_monthly_volume_usd,
-            country_code
+            country_code,
+            trade_corridors,
+            intended_payment_methods
        FROM merchants WHERE id = $1`,
     [id],
   );
