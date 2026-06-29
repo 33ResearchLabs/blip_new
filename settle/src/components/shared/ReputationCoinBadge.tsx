@@ -178,17 +178,17 @@ export function ReputationCoinBadge({
       {!hideCoins && (
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-amber-500 dark:text-amber-400" />
+            <Coins className="w-4 h-4 text-black/70 dark:text-white/70" />
             <span className="text-[11px] font-mono uppercase tracking-wider text-black/70 dark:text-white/70">
-              Coins
+              Waitlist Points
             </span>
           </div>
           <div className="text-right">
-            <div className="text-[14px] font-bold tabular-nums text-amber-600 dark:text-amber-300">
+            <div className="text-[14px] font-bold tabular-nums text-black dark:text-white">
               {loading ? '—' : (coins?.balance ?? 0).toLocaleString('en-US')}
             </div>
             {coins && coins.locked > 0 && (
-              <div className="text-[9px] text-amber-700/70 dark:text-amber-200/60 -mt-0.5 flex items-center gap-0.5 justify-end">
+              <div className="text-[9px] text-black/55 dark:text-white/55 -mt-0.5 flex items-center gap-0.5 justify-end">
                 <Lock className="w-2.5 h-2.5" /> {coins.locked.toLocaleString('en-US')} locked
               </div>
             )}

@@ -149,7 +149,7 @@ export function MerchantAppealSheet({
                       <div className="flex items-center gap-2">
                         <p className="text-[14px] font-semibold text-[#f5f5f7]">{r.label}</p>
                         {r.escalates && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-400 shrink-0">
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-white/[0.08] text-white/70 shrink-0">
                             Moderator review
                           </span>
                         )}

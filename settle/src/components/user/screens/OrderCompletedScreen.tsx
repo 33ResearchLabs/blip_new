@@ -142,8 +142,13 @@ export function OrderCompletedScreen({
           </div>
         </div>
 
-        {/* Merchant */}
-        <div className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}>
+        {/* Merchant — entire card is the profile link */}
+        <button
+          type="button"
+          onClick={onViewProfile}
+          aria-label={`View ${order.merchant.name || "merchant"}'s profile`}
+          className={`w-full text-left rounded-2xl p-4 flex items-center gap-3 cursor-pointer transition-colors hover:bg-surface-active focus:outline-none focus-visible:ring-2 focus-visible:ring-border-medium ${CARD}`}
+        >
           <div className="relative shrink-0">
             <div className="w-12 h-12 rounded-full overflow-hidden bg-border-subtle flex items-center justify-center">
               <UserAvatar
@@ -173,14 +178,8 @@ export function OrderCompletedScreen({
               {order.merchant.isOnline ? " · Online" : ""}
             </p>
           </div>
-          <button
-            onClick={onViewProfile}
-            className="shrink-0 inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[13px] font-semibold bg-surface-active text-text-primary border border-border-subtle"
-          >
-            View Profile
-            <ChevronRight className="w-4 h-4 text-text-tertiary" />
-          </button>
-        </div>
+          <ChevronRight className="w-5 h-5 text-text-tertiary shrink-0" aria-hidden="true" />
+        </button>
 
         {/* Rating */}
         <div className={`rounded-2xl p-4 ${CARD}`}>
