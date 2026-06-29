@@ -5,7 +5,7 @@
 import crypto from 'crypto';
 import { query, queryOne, transaction } from '@/lib/db';
 import type { WaitlistActorType, WaitlistReferral } from '@/lib/types/database';
-import { getReferralPoints } from './blipPoints';
+import { getReferralPoints, getRefereePoints } from './blipPoints';
 import { creditPoints } from './credit';
 
 const BASE62 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -136,8 +136,8 @@ export async function applyReferral(args: ApplyReferralArgs): Promise<ApplyRefer
   // Credit both sides outside the insert transaction — creditPoints itself is
   // transactional and idempotent. If either fails we surface 'credited' = false
   // by leaving reward_status='pending' for the admin to retry.
-  const referrerPoints = getReferralPoints(referrer.type);
-  const refereePoints = getReferralPoints(args.refereeType);
+  const referrerPoints = getReferralPoints(referrer.type);   // "Successful Referral"
+  const refereePoints = getRefereePoints(args.refereeType);  // "Join via Referral"
 
   try {
     await creditPoints({
