@@ -488,6 +488,7 @@ export default function UserDesktopPage() {
         userAvatar={auth.userAvatar ?? null}
         userId={auth.userId}
         userBalance={auth.userBalance}
+        solanaWallet={solanaWallet}
         notificationCount={notifications.filter((n) => !n.read).length}
         chatUnreadCount={chatUnreadCount}
       />
