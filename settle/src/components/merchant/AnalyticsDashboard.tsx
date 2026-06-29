@@ -340,7 +340,7 @@ export function AnalyticsDashboard({ merchantId }: AnalyticsDashboardProps) {
               {DAY_NAMES.map((day, dayIdx) => (
                 <>
                   <div key={`label-${day}`} className="text-xs text-white/50 py-1">{day}</div>
-                  {data.charts.hourlyHeatmap[dayIdx].map((count, hourIdx) => {
+                  {(data.charts.hourlyHeatmap[dayIdx] || []).map((count, hourIdx) => {
                     const maxCount = Math.max(...data.charts.hourlyHeatmap.flat());
                     const intensity = maxCount > 0 ? count / maxCount : 0;
                     return (

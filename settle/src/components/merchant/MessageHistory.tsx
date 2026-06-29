@@ -110,8 +110,8 @@ export function MessageHistory({ merchantId, onOpenChat, onClose, refreshTrigger
 
       const data = await res.json();
       if (data.success) {
-        setConversations(data.data.conversations);
-        setTotalUnread(data.data.totalUnread);
+        setConversations(data.data?.conversations || []);
+        setTotalUnread(data.data?.totalUnread || 0);
       }
     } catch (error) {
       console.error('Failed to fetch conversations:', error);

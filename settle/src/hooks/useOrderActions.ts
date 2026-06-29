@@ -8,6 +8,7 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { newSubmitId, orderActionKey, txAnchoredKey } from '@/lib/api/idempotencyKeys';
 import { isValidSolanaAddress } from '@/lib/validation/solana';
 import { showConfirm } from '@/context/ModalContext';
+import { notifyError, notifyApiError } from '@/lib/notify/notifyError';
 import { formatFiat } from '@/lib/format';
 import { getCachedPrice, ensurePriceFresh } from '@/lib/price/clientPriceCache';
 import bs58 from 'bs58';
@@ -77,11 +78,31 @@ export function useOrderActions({
   // reset on success. See lib/api/idempotencyKeys.ts for the rationale.
   const directBuySubmitIdRef = useRef<string | null>(null);
 
+  // ─── Re-entrancy guard for money / state-changing actions ───
+  // Keyed by `${action}:${orderId}` so DIFFERENT orders still run concurrently,
+  // but the SAME action on the SAME order can't be double-fired by a fast
+  // double-click or by two surfaces (e.g. order card + popup) triggering it at
+  // once. Backed by a ref because React state updates are async — two rapid
+  // clicks would both read a stale `acceptingOrderId === null` and slip through.
+  // Backend Idempotency-Key headers are the second line of defense; this is the
+  // UX line that prevents duplicate wallet popups / duplicate requests.
+  const inFlightActionsRef = useRef<Set<string>>(new Set());
+  const beginAction = (key: string): boolean => {
+    if (inFlightActionsRef.current.has(key)) return false;
+    inFlightActionsRef.current.add(key);
+    return true;
+  };
+  const endAction = (key: string): void => {
+    inFlightActionsRef.current.delete(key);
+  };
+
   // ═══════════════════════════════════════════════════════════════════
   // ACCEPT ORDER
   // ═══════════════════════════════════════════════════════════════════
   const acceptOrder = async (order: Order) => {
     if (!merchantId) return;
+    const guardKey = `accept:${order.id}`;
+    if (!beginAction(guardKey)) return; // already accepting this order — ignore double-click
     setAcceptingOrderId(order.id);
 
     const isBuyOrder = order.orderType === 'buy';
@@ -96,6 +117,7 @@ export function useOrderActions({
       addNotification('system', 'Please connect your wallet first to accept orders.', order.id);
       setShowWalletModal(true);
       setAcceptingOrderId(null);
+      endAction(guardKey);
       return;
     }
 
@@ -112,6 +134,7 @@ export function useOrderActions({
             addNotification('system', 'You need to add a payment method before accepting buy orders. Go to Settings → Payments.', order.id);
             playSound('error');
             setAcceptingOrderId(null);
+            endAction(guardKey);
             return;
           }
         }
@@ -137,6 +160,7 @@ export function useOrderActions({
       addNotification('system', 'Failed to sign accept binding — wallet rejected or locked. Please retry.', order.id);
       playSound('error');
       setAcceptingOrderId(null);
+      endAction(guardKey);
       return;
     }
 
@@ -271,10 +295,14 @@ export function useOrderActions({
       addNotification('system', `Order accepted! ${nextStepMsg}`, order.id, { status: 'accepted' });
       await afterMutationReconcile(order.id, { status: uiStatus as "escrow" | "active", expiresIn: 1800 });
     } catch (error) {
-      console.error("Error accepting order:", error);
+      notifyError('acceptOrder', error, {
+        fallbackMessage: 'Failed to accept order. Please try again.',
+        notify: (_t, m) => addNotification('system', m, order.id),
+      });
       playSound('error');
     } finally {
       setAcceptingOrderId(null);
+      endAction(guardKey);
     }
   };
 
@@ -488,6 +516,8 @@ export function useOrderActions({
   // ═══════════════════════════════════════════════════════════════════
   const markFiatPaymentSent = async (order: Order) => {
     if (!merchantId) return;
+    const guardKey = `markFiatPaymentSent:${order.id}`;
+    if (!beginAction(guardKey)) return; // already in flight for this order
     setMarkingDone(true);
 
     try {
@@ -518,6 +548,7 @@ export function useOrderActions({
             addNotification('system', 'Wallet signature rejected. Please try again.', order.id);
             playSound('error');
             setMarkingDone(false);
+            endAction(guardKey);
             return;
           } else {
             // Non-fatal: log and continue — server-side will handle it
@@ -571,14 +602,22 @@ export function useOrderActions({
         addNotification('system', `${claimedMsg} Waiting for seller to release escrow.`, order.id, { status: 'payment_sent' });
         await afterMutationReconcile(order.id, { status: "escrow" as const });
       } else {
-        addNotification('system', `Failed: ${data.error || 'Unknown error'}`, order.id);
+        await notifyApiError('markFiatPaymentSent', res, {
+          body: data,
+          fallbackMessage: 'Failed to mark payment sent. Please try again.',
+          notify: (_t, m) => addNotification('system', m, order.id),
+        });
         playSound('error');
       }
     } catch (error) {
-      console.error("Error marking payment sent:", error);
+      notifyError('markFiatPaymentSent', error, {
+        fallbackMessage: 'Failed to mark payment sent. Please try again.',
+        notify: (_t, m) => addNotification('system', m, order.id),
+      });
       playSound('error');
     } finally {
       setMarkingDone(false);
+      endAction(guardKey);
     }
   };
 
@@ -587,6 +626,8 @@ export function useOrderActions({
   // ═══════════════════════════════════════════════════════════════════
   const markPaymentSent = async (order: Order) => {
     if (!merchantId) return;
+    const guardKey = `markPaymentSent:${order.id}`;
+    if (!beginAction(guardKey)) return; // already completing this order
     setMarkingDone(true);
 
     try {
@@ -600,21 +641,31 @@ export function useOrderActions({
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setSelectedOrderPopup(null);
-          playSound('trade_complete');
-          addNotification('complete', `Trade completed with ${order.user}!`, order.id, { status: 'completed' });
-          await afterMutationReconcile(order.id, { status: "completed" as const });
-          syncBalance();
-        }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setSelectedOrderPopup(null);
+        playSound('trade_complete');
+        addNotification('complete', `Trade completed with ${order.user}!`, order.id, { status: 'completed' });
+        await afterMutationReconcile(order.id, { status: "completed" as const });
+        syncBalance();
+      } else {
+        // Previously: silent on non-ok / success:false — the merchant saw nothing.
+        await notifyApiError('markPaymentSent', res, {
+          body: data,
+          fallbackMessage: 'Failed to complete order. Please try again.',
+          notify: (_t, m) => addNotification('system', m, order.id),
+        });
+        playSound('error');
       }
     } catch (error) {
-      console.error("Error completing order:", error);
+      notifyError('markPaymentSent', error, {
+        fallbackMessage: 'Failed to complete order. Please try again.',
+        notify: (_t, m) => addNotification('system', m, order.id),
+      });
       playSound('error');
     } finally {
       setMarkingDone(false);
+      endAction(guardKey);
     }
   };
 
@@ -623,6 +674,8 @@ export function useOrderActions({
   // ═══════════════════════════════════════════════════════════════════
   const completeOrder = async (orderId: string) => {
     if (!merchantId) return;
+    const guardKey = `completeOrder:${orderId}`;
+    if (!beginAction(guardKey)) return; // already completing this order
 
     try {
       const res = await fetchWithAuth(`/api/orders/${orderId}`, {
@@ -634,19 +687,27 @@ export function useOrderActions({
           actor_id: merchantId,
         }),
       });
-      if (!res.ok) {
-        console.error("Failed to complete order:", res.status);
-        return;
-      }
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         playSound('trade_complete');
         await afterMutationReconcile(orderId, { status: "completed" as const });
         syncBalance();
+      } else {
+        await notifyApiError('completeOrder', res, {
+          body: data,
+          fallbackMessage: 'Failed to complete order. Please try again.',
+          notify: (_t, m) => addNotification('system', m, orderId),
+        });
+        playSound('error');
       }
     } catch (error) {
-      console.error("Error completing order:", error);
+      notifyError('completeOrder', error, {
+        fallbackMessage: 'Failed to complete order. Please try again.',
+        notify: (_t, m) => addNotification('system', m, orderId),
+      });
       playSound('error');
+    } finally {
+      endAction(guardKey);
     }
   };
 
@@ -661,6 +722,13 @@ export function useOrderActions({
       console.error("Order not found:", orderId);
       return;
     }
+
+    // Re-entrancy guard: held while the confirm dialog is open AND while the
+    // on-chain release runs, so a second click can't queue a second dialog or
+    // fire a second release. Released on the confirm path (inner finally) and
+    // on the cancel path (onCancel below).
+    const guardKey = `confirmPayment:${orderId}`;
+    if (!beginAction(guardKey)) return;
 
     // Safety: show confirmation dialog before proceeding.
     // Use the order's actual fiat currency (toCurrency) — the previous hardcoded
@@ -885,9 +953,10 @@ export function useOrderActions({
           playSound('error');
         } finally {
           setConfirmingOrderId(null);
+          endAction(guardKey);
         }
       },
-      { variant: 'warning', confirmLabel: 'Confirm Payment' }
+      { variant: 'warning', confirmLabel: 'Confirm Payment', onCancel: () => endAction(guardKey) }
     );
   };
 

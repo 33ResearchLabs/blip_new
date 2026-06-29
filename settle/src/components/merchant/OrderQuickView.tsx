@@ -48,6 +48,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { notifyError, notifyApiError } from "@/lib/notify/notifyError";
 import { formatCrypto, formatCount } from "@/lib/format";
 import { getSolscanTxUrl, getBlipscanTradeUrl } from "@/lib/explorer";
 // Backend-driven: action buttons read from dbOrder.primaryAction/secondaryAction
@@ -3181,6 +3182,10 @@ export function OrderQuickView({
   // Copy feedback for the Order ID shown in the completed-order app-bar.
   const [hdrCopied, setHdrCopied] = useLocalState(false);
 
+  // In-flight guard for the inline order-extension accept/decline buttons, so a
+  // double-tap can't fire two PUTs and a failure can no longer pass silently.
+  const [extActionBusy, setExtActionBusy] = useLocalState(false);
+
   // Merchant "Raise Appeal" sheet — opens the issue picker over the popup.
   // Captures the order status so the picker can show stage-appropriate issues.
   const [appealSheet, setAppealSheet] = useLocalState<{ orderId: string; status: string } | null>(null);
@@ -3207,6 +3212,21 @@ export function OrderQuickView({
     wasLockingRef.current = isLockingThis;
     if (finishedOk) onClose();
   }, [lockingEscrowOrderId, selectedOrder, escrowError, onClose]);
+
+  // Same pattern for CONFIRM_PAYMENT: confirmingOrderId is set only after the
+  // user confirms the dialog (inside confirmPayment's callback) and cleared when
+  // the on-chain release settles. When it transitions set -> null for THIS
+  // order, the flow is done — close the popup (its snapshot is now stale, e.g.
+  // "completed"). On cancel, confirmingOrderId is never set, so the popup stays
+  // open. Any failure is surfaced via toast before the popup closes.
+  const wasConfirmingRef = useLocalRef(false);
+  useLocalEffect(() => {
+    const isConfirmingThis =
+      !!selectedOrder && confirmingOrderId === selectedOrder.id;
+    const finished = wasConfirmingRef.current && !isConfirmingThis;
+    wasConfirmingRef.current = isConfirmingThis;
+    if (finished) onClose();
+  }, [confirmingOrderId, selectedOrder, onClose]);
   // Detect the merchant's OWN pending broadcast BUY order (they are the buyer,
   // no seller has accepted yet). This drives the dedicated "you'll pay using"
   // + "waiting for merchant" layout. `dbOrder` is the raw row (snake_case);
@@ -4001,7 +4021,10 @@ export function OrderQuickView({
                       <div className="flex gap-2">
                         <motion.button
                           whileTap={{ scale: 0.98 }}
+                          disabled={extActionBusy}
                           onClick={async () => {
+                            if (extActionBusy) return;
+                            setExtActionBusy(true);
                             try {
                               const res = await fetchWithAuth(
                                 `/api/orders/${selectedOrder.id}/extension`,
@@ -4021,8 +4044,23 @@ export function OrderQuickView({
                                   }),
                                 },
                               );
-                              if (res.ok) onClose();
-                            } catch {}
+                              if (res.ok) {
+                                onClose();
+                                return; // closing — leave busy set (avoids set-state-after-unmount)
+                              }
+                              await notifyApiError("extensionAccept", res, {
+                                title: "Couldn't accept extension",
+                                fallbackMessage:
+                                  "Failed to accept the extension. Please try again.",
+                              });
+                            } catch (e) {
+                              notifyError("extensionAccept", e, {
+                                title: "Couldn't accept extension",
+                                fallbackMessage:
+                                  "Failed to accept the extension. Please try again.",
+                              });
+                            }
+                            setExtActionBusy(false);
                           }}
                           className="flex-1 py-2.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
                         >
@@ -4031,7 +4069,10 @@ export function OrderQuickView({
                         </motion.button>
                         <motion.button
                           whileTap={{ scale: 0.98 }}
+                          disabled={extActionBusy}
                           onClick={async () => {
+                            if (extActionBusy) return;
+                            setExtActionBusy(true);
                             try {
                               const res = await fetchWithAuth(
                                 `/api/orders/${selectedOrder.id}/extension`,
@@ -4051,8 +4092,23 @@ export function OrderQuickView({
                                   }),
                                 },
                               );
-                              if (res.ok) onClose();
-                            } catch {}
+                              if (res.ok) {
+                                onClose();
+                                return; // closing — leave busy set (avoids set-state-after-unmount)
+                              }
+                              await notifyApiError("extensionDecline", res, {
+                                title: "Couldn't decline extension",
+                                fallbackMessage:
+                                  "Failed to decline the extension. Please try again.",
+                              });
+                            } catch (e) {
+                              notifyError("extensionDecline", e, {
+                                title: "Couldn't decline extension",
+                                fallbackMessage:
+                                  "Failed to decline the extension. Please try again.",
+                              });
+                            }
+                            setExtActionBusy(false);
                           }}
                           className="flex-1 py-2.5 rounded-lg bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.08] text-foreground/60 text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
                         >
@@ -4196,7 +4252,14 @@ export function OrderQuickView({
                       onClose();
                     },
                     CONFIRM_PAYMENT: () => {
-                      onConfirmPayment(selectedOrder.id).then(onClose);
+                      // Do NOT close synchronously: confirmPayment opens a
+                      // confirm dialog and the irreversible on-chain release runs
+                      // only after the user confirms. Closing here (the old
+                      // `.then(onClose)`) hid the dialog/spinner and ran the
+                      // release blind. Keep the popup open so its CONFIRM_PAYMENT
+                      // spinner shows; the wasConfirmingRef effect closes it once
+                      // the release settles (mirrors the inline-lock pattern).
+                      onConfirmPayment(selectedOrder.id);
                     },
                     CANCEL: () => {
                       onCancelOrderWithoutEscrow(selectedOrder.id);

@@ -262,10 +262,15 @@ export function MerchantChatTabs({
               // fall back to the order number so the list never shows the ugly id.
               const isPlaceholderName = (n?: string | null) =>
                 !n || /^(open_order_|m2m_)/i.test(n);
+              // Defensive: a malformed row (missing `user`) must not crash the
+              // whole inbox map. Coalesce to definite types so downstream usage
+              // (displayName, avatar) stays crash-safe without widening types.
+              const cpUsername = conv.user?.username ?? '';
+              const cpAvatar = conv.user?.avatar_url ?? null;
               const displayName = !isPlaceholderName(conv.counterparty_name)
                 ? (conv.counterparty_name as string)
-                : !isPlaceholderName(conv.user.username)
-                  ? conv.user.username
+                : !isPlaceholderName(cpUsername)
+                  ? cpUsername
                   : `#${conv.order_number}`;
               const initials = getInitials(displayName);
               const isActive = ACTIVE_STATUSES.has(conv.order_status);
@@ -280,7 +285,7 @@ export function MerchantChatTabs({
                       displayName,
                       conv.order_number,
                       conv.order_type,
-                      conv.user.avatar_url,
+                      cpAvatar,
                     );
                     fetchWithAuth(`/api/orders/${conv.order_id}/messages`, {
                       method: "PATCH",
@@ -300,10 +305,10 @@ export function MerchantChatTabs({
                 >
                   {/* Avatar */}
                   <div style={{ position: "relative", flexShrink: 0 }}>
-                    {conv.user.avatar_url ? (
+                    {cpAvatar ? (
                       <img
-                        src={conv.user.avatar_url}
-                        alt={conv.user.username}
+                        src={cpAvatar}
+                        alt={cpUsername}
                         style={{ width: 46, height: 46, borderRadius: 999, objectFit: "cover", border: "1px solid var(--border)" }}
                       />
                     ) : (

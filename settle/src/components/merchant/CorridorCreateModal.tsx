@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -10,9 +11,11 @@ import {
   Percent,
   AlertTriangle,
   Plus,
+  Loader2,
 } from "lucide-react";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { showAlert } from '@/context/ModalContext';
+import { notifyError, notifyApiError } from '@/lib/notify/notifyError';
 import { clampDecimal, DECIMAL_PRESETS } from '@/lib/input/sanitize';
 
 export interface CorridorFormState {
@@ -48,6 +51,10 @@ export function CorridorCreateModal({
   onRefreshBalance,
   onFetchActiveOffers,
 }: CorridorCreateModalProps) {
+  // In-flight guard: keeps the submit button disabled + spinning while the POST
+  // is running so a double-tap can't create two live corridor offers.
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -276,12 +283,13 @@ export function CorridorCreateModal({
                 <motion.button
                   whileTap={{ scale: 0.98 }}
                   disabled={
+                    isSubmitting ||
                     !corridorForm.availableAmount ||
                     parseFloat(corridorForm.availableAmount) <= 0 ||
                     parseFloat(corridorForm.availableAmount) > (effectiveBalance || 0)
                   }
                   onClick={async () => {
-                    if (!merchantId) return;
+                    if (!merchantId || isSubmitting) return; // guard double-submit
                     const availableAmount = parseFloat(corridorForm.availableAmount || "0");
                     if (availableAmount > (effectiveBalance || 0)) {
                       showAlert('Invalid Amount', 'Amount exceeds your wallet balance', 'warning');
@@ -291,11 +299,24 @@ export function CorridorCreateModal({
                       showAlert('Invalid Amount', 'Please enter a valid amount', 'warning');
                       return;
                     }
-                    try {
-                      const rate = parseFloat(corridorForm.rate || "3.67");
-                      const premium = parseFloat(corridorForm.premium || "0.25") / 100;
-                      const effectiveRate = rate * (1 + premium);
+                    // Validate the rate explicitly — never silently fall back to a
+                    // hardcoded price (a wrong rate is a financial error).
+                    const rate = parseFloat(corridorForm.rate);
+                    if (!corridorForm.rate || isNaN(rate) || rate <= 0) {
+                      showAlert('Invalid Rate', 'Please enter a valid exchange rate.', 'warning');
+                      return;
+                    }
+                    const minAmount = parseFloat(corridorForm.minAmount || "100");
+                    const maxAmount = parseFloat(corridorForm.maxAmount || "10000");
+                    if (minAmount > maxAmount) {
+                      showAlert('Invalid Range', 'Minimum amount cannot exceed the maximum amount.', 'warning');
+                      return;
+                    }
+                    const premium = parseFloat(corridorForm.premium || "0.25") / 100;
+                    const effectiveRate = rate * (1 + premium);
 
+                    setIsSubmitting(true);
+                    try {
                       const res = await fetchWithAuth("/api/merchant/offers", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
@@ -304,8 +325,8 @@ export function CorridorCreateModal({
                           type: "sell",
                           payment_method: "bank",
                           rate: effectiveRate,
-                          min_amount: parseFloat(corridorForm.minAmount || "100"),
-                          max_amount: parseFloat(corridorForm.maxAmount || "10000"),
+                          min_amount: minAmount,
+                          max_amount: maxAmount,
                           available_amount: availableAmount,
                           bank_name: "Emirates NBD",
                           bank_account_name: "QuickSwap LLC",
@@ -313,12 +334,8 @@ export function CorridorCreateModal({
                           wallet_address: solanaWalletAddress,
                         }),
                       });
-                      if (!res.ok) {
-                        console.error("Failed to create offer:", res.status);
-                        return;
-                      }
-                      const data = await res.json();
-                      if (data.success) {
+                      const data = await res.json().catch(() => ({}));
+                      if (res.ok && data.success) {
                         onClose();
                         onFetchActiveOffers();
                         setCorridorForm({
@@ -330,12 +347,25 @@ export function CorridorCreateModal({
                           rate: "3.67",
                           premium: "0.25",
                         });
+                      } else {
+                        // Previously: console.error + return (silent). Now surfaced.
+                        await notifyApiError("createCorridor", res, {
+                          body: data,
+                          title: "Couldn't open corridor",
+                          fallbackMessage: "Failed to open the corridor. Please try again.",
+                        });
                       }
                     } catch (error) {
-                      console.error("Error creating corridor:", error);
+                      notifyError("createCorridor", error, {
+                        title: "Couldn't open corridor",
+                        fallbackMessage: "Failed to open the corridor. Please try again.",
+                      });
+                    } finally {
+                      setIsSubmitting(false);
                     }
                   }}
                   className={`flex-[2] py-3 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-2 ${
+                    isSubmitting ||
                     !corridorForm.availableAmount ||
                     parseFloat(corridorForm.availableAmount) <= 0 ||
                     parseFloat(corridorForm.availableAmount) > (effectiveBalance || 0)
@@ -343,7 +373,11 @@ export function CorridorCreateModal({
                       : 'bg-white text-background hover:bg-accent'
                   }`}
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  {isSubmitting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
                   Open Corridor
                 </motion.button>
               </div>

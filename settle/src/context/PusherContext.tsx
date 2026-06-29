@@ -108,6 +108,12 @@ export function PusherProvider({ children }: PusherProviderProps) {
 
   const pusherRef = useRef<PusherClientType | null>(null);
   const channelsRef = useRef<Map<string, Channel>>(new Map());
+  // Reference count per channel name. Multiple hooks/components subscribe to the
+  // same shared channel (e.g. `private-order-<id>` is used by the dashboard chat
+  // transport AND the order-chat panel AND order-status hooks). We must only
+  // tear a channel down once the LAST subscriber releases it — otherwise one
+  // component's unmount silently severs everyone else's live bindings.
+  const subscriberCountsRef = useRef<Map<string, number>>(new Map());
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitializingRef = useRef(false);
@@ -131,6 +137,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
           }
         });
         channelsRef.current.clear();
+        subscriberCountsRef.current.clear();
 
         // Disconnect
         pusherRef.current.disconnect();
@@ -430,9 +437,14 @@ export function PusherProvider({ children }: PusherProviderProps) {
       return null;
     }
 
-    // Check if already subscribed
+    // Already subscribed: another consumer is now also relying on this channel,
+    // so bump the reference count and hand back the shared instance.
     const existing = channelsRef.current.get(channelName);
     if (existing) {
+      subscriberCountsRef.current.set(
+        channelName,
+        (subscriberCountsRef.current.get(channelName) ?? 0) + 1,
+      );
       return existing;
     }
 
@@ -441,6 +453,7 @@ export function PusherProvider({ children }: PusherProviderProps) {
 
       const channel = pusher.subscribe(channelName);
       channelsRef.current.set(channelName, channel);
+      subscriberCountsRef.current.set(channelName, 1);
 
       channel.bind("pusher:subscription_error", (error: unknown) => {
         console.error(`[Pusher] Subscription error for ${channelName}:`, error);
@@ -460,9 +473,18 @@ export function PusherProvider({ children }: PusherProviderProps) {
     const pusher = pusherRef.current;
     if (!pusher) return;
 
+    // Reference-counted: only tear the channel down when the LAST subscriber
+    // releases it. If other consumers still hold a reference, just decrement.
+    const current = subscriberCountsRef.current.get(channelName) ?? 0;
+    if (current > 1) {
+      subscriberCountsRef.current.set(channelName, current - 1);
+      return;
+    }
+
     try {
       pusher.unsubscribe(channelName);
       channelsRef.current.delete(channelName);
+      subscriberCountsRef.current.delete(channelName);
     } catch (error) {
       console.error(
         `[Pusher] Failed to unsubscribe from ${channelName}:`,
