@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, forbiddenResponse, errorResponse } from '@/lib/middleware/auth';
 import { queryOne, transaction } from '@/lib/db';
 import { setupWaitlistForActor } from '@/lib/waitlist/signup';
+import { USER_BLIP_POINTS, MERCHANT_BLIP_POINTS } from '@/lib/waitlist/blipPoints';
 import { sanitizeCorridorIds, sanitizePaymentMethodValues } from '@/lib/waitlist/onboardingOptions';
 import { defaultAvatarUrl } from '@/lib/avatars';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
@@ -135,12 +136,16 @@ export async function POST(request: NextRequest) {
     return errorResponse('Failed to create merchant waitlist entry', 500);
   }
 
-  // Activate the new merchant row on the waitlist (credits MERCHANT_REGISTER points).
+  // Activate the new merchant row on the waitlist. The actor already earned the
+  // user-side join bonus, so credit only the DELTA to the merchant level
+  // (merchant 500 − user 200 = 300) rather than the full merchant join bonus.
   try {
+    const upgradeDelta = Math.max(0, MERCHANT_BLIP_POINTS.REGISTER - USER_BLIP_POINTS.REGISTER);
     const setup = await setupWaitlistForActor({
       actorId: merchantId,
       actorType: 'merchant',
       source: 'upgrade_from_user',
+      registerPointsOverride: upgradeDelta,
     });
     return NextResponse.json({
       success: true,

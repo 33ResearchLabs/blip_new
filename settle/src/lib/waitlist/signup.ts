@@ -21,6 +21,13 @@ interface SetupWaitlistArgs {
   actorType: WaitlistActorType;
   source?: string;
   referralCode?: string;
+  /**
+   * Override the REGISTER/MERCHANT_REGISTER bonus. Used by the user→merchant
+   * upgrade path to credit only the DELTA to the merchant level (e.g. 300 =
+   * merchant 500 − user 200) instead of the full merchant join bonus, since
+   * the actor already earned the user-side join bonus.
+   */
+  registerPointsOverride?: number;
 }
 
 export interface SetupWaitlistResult {
@@ -70,14 +77,17 @@ export async function setupWaitlistForActor(args: SetupWaitlistArgs): Promise<Se
     throw new Error('Could not assign unique referral code after retries');
   }
 
-  // 3. Credit register points (idempotent).
+  // 3. Credit register points (idempotent). On a user→merchant upgrade the
+  // caller passes registerPointsOverride = the delta to the merchant level
+  // (e.g. 300) so the actor isn't double-paid the join bonus they already got.
   const event = actorType === 'merchant' ? 'MERCHANT_REGISTER' : 'REGISTER';
-  const registerPoints = getRegisterPoints(actorType);
+  const registerPoints = args.registerPointsOverride ?? getRegisterPoints(actorType);
   const regResult = await creditPoints({
     actorId,
     actorType,
     event,
     points: registerPoints,
+    metadata: args.registerPointsOverride != null ? { upgrade_delta: true } : undefined,
   });
 
   // 4. Apply referral if supplied. Errors are non-fatal — the signup itself
