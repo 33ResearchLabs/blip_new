@@ -788,7 +788,7 @@ function MerchantLayout(props: {
         isMerchant
       />
       <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
-        <div className="lg:col-span-6">
+        <div className="lg:col-span-9">
           <HeroCard
             referralUnit={referralUnit}
             onOpenReferral={onOpenReferral}
@@ -807,9 +807,6 @@ function MerchantLayout(props: {
             onOpenReferral={onOpenReferral}
             isMerchant
           />
-        </div>
-        <div className="hidden lg:block lg:col-span-3">
-          <RealTimeActivityCard leaderboard={leaderboard} />
         </div>
       </div>
 
@@ -995,7 +992,7 @@ function UserLayout(props: {
         isMerchant={false}
       />
       <div className="hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-3 mb-0 lg:mb-3 lg:items-stretch">
-        <div className="lg:col-span-6">
+        <div className="lg:col-span-9">
           <HeroCard
             referralUnit={referralUnit}
             onOpenReferral={onOpenReferral}
@@ -1014,9 +1011,6 @@ function UserLayout(props: {
             onOpenReferral={onOpenReferral}
             isMerchant={false}
           />
-        </div>
-        <div className="hidden lg:block lg:col-span-3">
-          <RealTimeActivityCard leaderboard={leaderboard} />
         </div>
       </div>
 
@@ -1053,26 +1047,26 @@ function UserLayout(props: {
           </div>
 
           {/* Invite Friends */}
-          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4  flex flex-col md:flex-row items-start md:items-center  justify-between  gap-3`}>
-            <div className="flex items-center gap-3">
+          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5  flex flex-col md:flex-row items-start md:items-center  justify-between  gap-4`}>
+            <div className="flex items-center gap-3 flex-1 min-w-0">
               <div className={`w-10 h-10 rounded-full ${t.inputBg} border ${t.border} flex items-center justify-center shrink-0`}>
                 <UsersIcon className={`w-5 h-5 ${t.txt}`} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className={`text-sm font-semibold ${t.txt}`}>Invite Friends. Earn More.</p>
                 <p className={`text-[11px] ${t.muted} leading-relaxed`}>
                   Earn {formatCount(USER_BLIP_POINTS.REFERRAL)} pts per user signup — {formatCount(MERCHANT_BLIP_POINTS.REFERRAL)} pts if they join as a merchant.
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="flex items-center gap-4 w-full md:w-auto shrink-0">
               <div>
                 <p className={`text-[10px] font-semibold uppercase tracking-[0.14em] ${t.sub}`}>Your Referrals </p>
                 <p className={`text-lg font-semibold ${t.txt} leading-tight`}>{referralCount}</p>
               </div>
               <button
                 onClick={onOpenReferral}
-                className={`${t.inputBg} border ${t.border} rounded-full px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.12em] ${t.txt} ${t.hov} transition`}
+                className={`${t.inputBg} border ${t.border} rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${t.txt} ${t.hov} transition whitespace-nowrap`}
               >
                 View Referrals
               </button>
@@ -1303,213 +1297,6 @@ function HeroCard({
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-// ── Real-Time Activity panel — sits in the top-right of the merchant
-// dashboard, showing a live feed of recent waitlist events. Mixes the
-// signed-in user's own activity (so they can see themselves rewarded)
-// with a rotating mock pool of ~100 community events so the panel feels
-// alive even on a fresh deploy. Visible rows reshuffle every 9 seconds.
-
-// Mock pool — wide spread of names (individuals + merchant entities)
-// and point amounts up to 7,500 so the feed shows a believable mix of
-// micro-rewards (quests, referrals) and milestone payouts.
-const MOCK_ACTIVITY_NAMES: ReadonlyArray<string> = [
-  'Aisha K.', 'Marcus L.', 'Sofia R.', 'Diego P.', 'Yuki T.', 'Liam W.',
-  'Priya N.', 'Noah B.', 'Maya S.', 'Ethan C.', 'Zara F.', 'Hugo M.',
-  'Camila V.', 'Felix D.', 'Ines O.', 'Omar J.', 'Lena G.', 'Caleb H.',
-  'Anika P.', 'Theo Q.', 'Isla R.', 'Mateo S.', 'Nadia T.', 'Bruno U.',
-  'Sana Y.', 'Ryo K.', 'Adaeze O.', 'Tariq B.', 'Mira L.', 'Jonah F.',
-  'Beatriz N.', 'Idris M.', 'Vera C.', 'Sefa E.', 'Liana D.', 'Kai R.',
-  'Amara J.', 'Ravi T.', 'Selin A.', 'Otto B.', 'Anya S.', 'Rohan P.',
-  'Esme K.', 'Kofi A.', 'Hana M.', 'Pablo R.', 'Yara H.', 'Dmitri Z.',
-  'Iris L.', 'Quentin F.',
-  'Nova Merchants', 'Titan Merchants', 'Beacon Finance', 'Orion Pay',
-  'Lumen Settle', 'Atlas Exchange', 'Helio Cash', 'Vega FX',
-  'Spectra OTC', 'Polaris Hub', 'Bridge & Co.', 'Continental Forex',
-  'Mercato Pay', 'Sahara Stables', 'Northgate Rails', 'Tidewater Crypto',
-  'Goldline Settle', 'Harbor Liquidity', 'Reverb Pay', 'Cascade FX',
-  'Anchor Stablecoins', 'Pioneer Merchant', 'Mainline Wires', 'Bazaar Pay',
-  'Citadel Settlement', 'Driftwood Brokers', 'Echelon Pay', 'Frontier Cash',
-];
-
-const MOCK_ACTIVITY_TEMPLATES: ReadonlyArray<{
-  action: string;
-  points: number | null;
-  icon: React.ComponentType<{ className?: string }>;
-}> = [
-  // Micro-rewards
-  { action: 'Earned from Referral',          points: 50,    icon: Store      },
-  { action: 'Completed Social Quest',        points: 100,   icon: Award      },
-  { action: 'Joined Waitlist',               points: 50,    icon: UserPlus   },
-  { action: 'Followed @blip_money on X',     points: 100,   icon: Award      },
-  { action: 'Joined Telegram Community',     points: 100,   icon: Award      },
-  { action: 'Retweeted Campaign',            points: 150,   icon: Award      },
-  { action: 'Verified Email',                points: 200,   icon: BadgeCheck },
-  // Mid-tier
-  { action: 'Completed KYC Verification',    points: 250,   icon: BadgeCheck },
-  { action: 'First Settlement Completed',    points: 500,   icon: Trophy     },
-  { action: 'Earned Referral Bonus',         points: 500,   icon: Store      },
-  { action: 'Onboarded a Merchant',          points: 750,   icon: Store      },
-  { action: 'Unlocked Founder Badge',        points: 1000,  icon: Trophy     },
-  // Big payouts — what the user asked to see
-  { action: 'Reached 2,500 Points Tier',     points: null,  icon: Trophy     },
-  { action: 'Tier Up: Reached 5,000 Points', points: null,  icon: Trophy     },
-  { action: 'Top-100 Bonus Awarded',         points: 2500,  icon: Award      },
-  { action: 'Founding Merchant Bonus',       points: 5000,  icon: Trophy     },
-  { action: 'Leaderboard #10 Bonus',         points: 5000,  icon: Trophy     },
-  { action: 'Liquidity Provider Bonus',      points: 7500,  icon: Trophy     },
-  { action: 'Settled $10K in Orders',        points: 5000,  icon: Trophy     },
-];
-
-const TIME_LABELS: ReadonlyArray<string> = [
-  'just now', '8 sec ago', '24 sec ago', '47 sec ago',
-  '1 min ago', '2 min ago', '3 min ago', '5 min ago',
-  '7 min ago', '11 min ago', '14 min ago',
-];
-
-interface ActivityRow {
-  id: string;
-  name: string;
-  action: string;
-  points: number | null;
-  icon: React.ComponentType<{ className?: string }>;
-  time: string;
-  highlight?: boolean;
-}
-
-// Pull six pseudo-random rows from the mock pool. The signed-in user
-// is intentionally NOT pinned into the feed — it's a community pulse,
-// not a personal history. (User's own earnings live in the BLIP points
-// total + reward history modal.)
-function buildActivityRows(seed: number): ActivityRow[] {
-  // Mulberry32-style deterministic pick keyed off `seed` so the same
-  // seed always produces the same shuffle (predictable for tests, fresh
-  // for each interval tick).
-  let s = seed | 0;
-  const rand = () => {
-    s = (s + 0x6D2B79F5) | 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-
-  const rows: ActivityRow[] = [];
-  const usedNames = new Set<string>();
-
-  for (let i = 0; i < 6; i++) {
-    let name = MOCK_ACTIVITY_NAMES[Math.floor(rand() * MOCK_ACTIVITY_NAMES.length)];
-    let guard = 0;
-    while (usedNames.has(name) && guard++ < 12) {
-      name = MOCK_ACTIVITY_NAMES[Math.floor(rand() * MOCK_ACTIVITY_NAMES.length)];
-    }
-    usedNames.add(name);
-
-    const tpl = MOCK_ACTIVITY_TEMPLATES[Math.floor(rand() * MOCK_ACTIVITY_TEMPLATES.length)];
-    const time = TIME_LABELS[i] ?? TIME_LABELS[TIME_LABELS.length - 1];
-
-    rows.push({
-      id: `m${seed}-${i}`,
-      name,
-      action: tpl.action,
-      points: tpl.points,
-      icon: tpl.icon,
-      time,
-    });
-  }
-  return rows;
-}
-
-function RealTimeActivityCard({
-  leaderboard,
-}: {
-  leaderboard: LeaderboardRow[];
-}) {
-  const t = useThemeTokens();
-  // `leaderboard` is preserved on the prop signature so existing call
-  // sites keep compiling, but the feed pulls from a mock community
-  // pool so the panel feels alive on a fresh deploy.
-  void leaderboard;
-
-  const [seed, setSeed] = React.useState(() => Math.floor(Math.random() * 0xffffffff));
-  React.useEffect(() => {
-    // 3.5-minute rotation — slow enough that users don't see the feed
-    // constantly churning while they read, fresh enough that it still
-    // reads as "live" on the next visit.
-    const id = setInterval(() => {
-      setSeed(Math.floor(Math.random() * 0xffffffff));
-    }, 210_000);
-    return () => clearInterval(id);
-  }, []);
-
-  const rows = React.useMemo(() => buildActivityRows(seed), [seed]);
-
-  return (
-    <div
-      id="dash-activity"
-      className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl overflow-hidden flex flex-col h-full`}
-    >
-      <div className={`px-5 py-3 border-b ${t.divider} flex items-center justify-between`}>
-        <span className={`text-[10.5px] font-semibold uppercase tracking-[0.2em] ${t.sub}`}>
-          Real-Time Activity
-        </span>
-        <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold tracking-tight ${t.sub}`}>
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full rounded-full animate-ping" style={{ background: `${ACCENT}99` }} />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: ACCENT }} />
-          </span>
-          Live
-        </span>
-      </div>
-
-      <div className="py-1 max-h-[320px] overflow-y-auto flex-1">
-        {rows.map((a) => {
-          const Icon = a.icon;
-          return (
-            <div
-              key={a.id}
-              className={`flex items-center justify-between px-5 py-2.5 ${t.hov} transition`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${t.inputBg} border ${t.border}`}>
-                  <Icon className={`w-[15px] h-[15px] ${t.muted}`} />
-                </div>
-                <div className="min-w-0">
-                  <p className={`text-[13px] font-semibold ${t.txt} truncate tracking-tight`}>
-                    {a.name}
-                  </p>
-                  <p className={`text-[11.5px] ${t.muted} truncate leading-snug`}>
-                    {a.action}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right shrink-0 ml-3 flex flex-col items-end gap-0.5">
-                {a.points !== null && (
-                  <span
-                    className={`text-[11px] font-semibold tracking-tight px-2 py-0.5 rounded-full tabular-nums ${t.inputBg} border ${t.border} ${t.txt}`}
-                  >
-                    +{a.points.toLocaleString('en-US')} pts
-                  </span>
-                )}
-                <span className={`text-[10.5px] ${t.sub} leading-tight tabular-nums`}>
-                  {a.time}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <button
-        type="button"
-        className={`w-full px-5 py-3 border-t ${t.divider} flex items-center justify-between text-[12px] font-semibold ${t.txt} hover:opacity-70 transition`}
-      >
-        View all activity
-        <ArrowRight className="w-3.5 h-3.5" />
-      </button>
     </div>
   );
 }
