@@ -11,17 +11,17 @@ export const USER_BLIP_POINTS = {
   REFERRAL: 100,      // Successful Referral (referrer earns)
   REFEREE: 50,        // Join via Referral (new joiner earns)
   TASK_DEFAULT: 50,   // Verified Social Task
-  ONBOARD_FORM: 500,  // Complete Waitlist Profile
+  ONBOARD_FORM: 200,  // Complete Waitlist Profile
 } as const;
 
 export const MERCHANT_BLIP_POINTS = {
-  REGISTER: 1000,     // Join Waitlist
-  REFERRAL: 500,      // Successful Referral (referrer earns)
-  REFEREE: 250,       // Join via Referral (new joiner earns)
-  TWITTER: 250,       // Verified Social Task
-  TELEGRAM: 250,
-  DISCORD: 250,
-  RETWEET: 250,
+  REGISTER: 500,      // Join Waitlist
+  REFERRAL: 200,      // Successful Referral (referrer earns)
+  REFEREE: 100,       // Join via Referral (new joiner earns)
+  TWITTER: 100,       // Verified Social Task
+  TELEGRAM: 100,
+  DISCORD: 100,
+  RETWEET: 100,
   ONBOARD_FORM: 500,  // Complete Waitlist Profile
 } as const;
 
