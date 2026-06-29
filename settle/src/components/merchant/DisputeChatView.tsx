@@ -5,6 +5,7 @@ import { ChevronLeft, Shield } from 'lucide-react';
 import { ChatRoom } from '@/components/chat/ChatRoom';
 import { useRealtimeChat } from '@/hooks/useRealtimeChat';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { notifyError, notifyApiError } from '@/lib/notify/notifyError';
 import { AlertTriangle } from 'lucide-react';
 
 interface DisputeChatViewProps {
@@ -26,6 +27,9 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
   const [myMutualCancel, setMyMutualCancel] = useState(false);
   const [counterpartyMutualCancel, setCounterpartyMutualCancel] = useState(false);
   const [mutualCancelLoading, setMutualCancelLoading] = useState(false);
+  // Synchronous re-entrancy guard (state has render latency) so a double-tap
+  // can't fire two mutual-cancel requests.
+  const mutualCancelInFlightRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +50,8 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
   }, [orderId]);
 
   const handleMutualCancel = async (action: 'request' | 'withdraw') => {
+    if (mutualCancelInFlightRef.current) return;
+    mutualCancelInFlightRef.current = true;
     setMutualCancelLoading(true);
     try {
       const res = await fetchWithAuth(`/api/orders/${orderId}/dispute/mutual-cancel`, {
@@ -53,12 +59,25 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, actor_type: 'merchant', actor_id: merchantId }),
       });
-      const data = await res.json();
-      if (data.success) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
         setMyMutualCancel(action === 'request');
         if (data.mutualCancelComplete) onBack();
+      } else {
+        // Previously swallowed — a failed cancel request showed nothing.
+        await notifyApiError('mutualCancel', res, {
+          body: data,
+          title: "Couldn't update cancellation",
+          fallbackMessage: 'Failed to update the cancellation request. Please try again.',
+        });
       }
-    } catch { /* best-effort */ } finally {
+    } catch (e) {
+      notifyError('mutualCancel', e, {
+        title: "Couldn't update cancellation",
+        fallbackMessage: 'Failed to update the cancellation request. Please try again.',
+      });
+    } finally {
+      mutualCancelInFlightRef.current = false;
       setMutualCancelLoading(false);
     }
   };

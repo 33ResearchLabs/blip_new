@@ -42,7 +42,7 @@ export interface ChatMessage {
   senderType?: "user" | "merchant" | "compliance" | "system";
   senderName?: string;
   isRead?: boolean;
-  status?: "sending" | "sent" | "delivered" | "read";
+  status?: "sending" | "sent" | "delivered" | "read" | "failed";
   isHighlighted?: boolean;
   // Phase 3: idempotency + ordering. Both optional for backward compat
   // with messages constructed before this field existed.
@@ -1072,6 +1072,21 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         }),
       );
 
+      // DRY helper: update just this optimistic message's delivery status.
+      const setTempStatus = (status: ChatMessage["status"]) =>
+        setChatWindows((prev) =>
+          prev.map((w) =>
+            w.id !== chatId
+              ? w
+              : {
+                  ...w,
+                  messages: w.messages.map((m) =>
+                    m.id === tempId ? { ...m, status } : m,
+                  ),
+                },
+          ),
+        );
+
       try {
         const res = await fetchWithAuth(
           `/api/orders/${window.orderId}/messages`,
@@ -1094,19 +1109,10 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         );
 
         if (!res.ok) {
-
-          // Update status to sent even in demo mode
-          setChatWindows((prev) =>
-            prev.map((w) => {
-              if (w.id !== chatId) return w;
-              return {
-                ...w,
-                messages: w.messages.map((m) =>
-                  m.id === tempId ? { ...m, status: "sent" as const } : m,
-                ),
-              };
-            }),
-          );
+          // The send was REJECTED by the server. Never mark it "sent" (the old
+          // bug showed a delivered tick for a message that was never persisted);
+          // mark it "failed" so the user sees it and can retry.
+          setTempStatus("failed");
           return;
         }
 
@@ -1134,11 +1140,47 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
             }),
           );
         }
-      } catch (error) {
-
+      } catch {
+        // Network/timeout/parse failure — mark the optimistic message failed
+        // (was previously swallowed silently, leaving it stuck "sending").
+        setTempStatus("failed");
       }
     },
     [actorType, actorId],
+  );
+
+  // Retry a failed send: drop the failed bubble and re-send its content through
+  // sendMessage (fresh optimistic message + idempotency clientId). DRY — reuses
+  // the single send path rather than duplicating the POST logic.
+  const retryMessage = useCallback(
+    (chatId: string, messageId: string) => {
+      const win = chatWindowsRef.current.find((w) => w.id === chatId);
+      const failed = win?.messages.find(
+        (m) => m.id === messageId && m.status === "failed",
+      );
+      if (!failed) return;
+      setChatWindows((prev) =>
+        prev.map((w) =>
+          w.id !== chatId
+            ? w
+            : { ...w, messages: w.messages.filter((m) => m.id !== messageId) },
+        ),
+      );
+      void sendMessage(
+        chatId,
+        failed.text ?? "",
+        failed.imageUrl ?? undefined,
+        failed.fileUrl
+          ? {
+              fileUrl: failed.fileUrl,
+              fileName: failed.fileName ?? "",
+              fileSize: failed.fileSize ?? 0,
+              mimeType: failed.mimeType ?? "",
+            }
+          : undefined,
+      );
+    },
+    [sendMessage],
   );
 
   // Track orders where markAsRead has been rejected or recently called
@@ -1437,6 +1479,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
     closeChat,
     toggleMinimize,
     sendMessage,
+    retryMessage,
     markAsRead,
     sendTypingIndicator,
     refetchMessagesForOrder,

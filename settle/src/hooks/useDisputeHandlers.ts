@@ -239,18 +239,21 @@ export function useDisputeHandlers({
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          fetchDisputeInfo(orderId);
-          if (data.data?.finalized) {
-            fetchOrders();
-          }
-          playSound('click');
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        fetchDisputeInfo(orderId);
+        if (data.data?.finalized) {
+          fetchOrders();
         }
+        playSound('click');
+      } else {
+        // Previously silent on non-ok / success:false for a financial action.
+        addNotification('system', data.error || 'Failed to submit your response. Please try again.', orderId);
+        playSound('error');
       }
     } catch (err) {
       console.error('Failed to respond to resolution:', err);
+      addNotification('system', 'Failed to submit your response. Please try again.', orderId);
       playSound('error');
     } finally {
       setIsRespondingToResolution(false);
