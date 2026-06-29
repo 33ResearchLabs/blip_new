@@ -77,7 +77,19 @@ export async function GET(request: NextRequest) {
           'username', u.username,
           'rating', u.rating,
           'total_trades', u.total_trades,
-          'avatar_url', u.avatar_url
+          -- Resolve avatar to the SAME counterparty as counterparty_name below:
+          -- real user → their avatar; broadcast/M2M (placeholder user) → the
+          -- OTHER merchant slot's avatar, so M2M chats show the merchant's
+          -- picture instead of the placeholder user's seeded default.
+          'avatar_url', CASE
+            WHEN u.username IS NOT NULL
+                 AND u.username NOT LIKE 'open_order_%'
+                 AND u.username NOT LIKE 'm2m_%'
+              THEN u.avatar_url
+            WHEN o.buyer_merchant_id = $1 THEN seller_m.avatar_url
+            WHEN o.merchant_id = $1 THEN buyer_m.avatar_url
+            ELSE COALESCE(buyer_m.avatar_url, seller_m.avatar_url)
+          END
         ) as user,
         -- Friendly counterparty name relative to the viewing merchant ($1).
         -- Mirrors deriveCounterparty() role logic: U2M → the real user;

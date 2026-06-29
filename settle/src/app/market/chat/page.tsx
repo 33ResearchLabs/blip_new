@@ -140,6 +140,41 @@ function userEmoji(name: string) {
   return EMOJIS[hash % EMOJIS.length];
 }
 
+/** Counterparty avatar — renders the profile image when present, falling back
+ *  to the tinted-initials block on a missing URL or a load error. Keeps the
+ *  existing initials look as the graceful fallback. */
+function Avatar({
+  name,
+  src,
+  className,
+  textClassName = "text-sm",
+}: {
+  name: string;
+  src?: string | null;
+  className: string;
+  textClassName?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className={`${className} object-cover`}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className={`${className} flex items-center justify-center font-bold text-foreground ${textClassName}`}
+      style={avatarTint(name)}
+    >
+      {initials(name)}
+    </div>
+  );
+}
+
 function clock(d: Date) {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
@@ -699,12 +734,11 @@ export default function TradeChatPage() {
               {/* chat header */}
               <div className="h-14 shrink-0 flex items-center gap-3 px-4 border-b border-white/[0.06]">
                 <div className="relative shrink-0">
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-foreground"
-                    style={avatarTint(activeConvo.user.username)}
-                  >
-                    {initials(activeConvo.user.username)}
-                  </div>
+                  <Avatar
+                    name={activeConvo.user.username}
+                    src={activeConvo.user.avatar_url}
+                    className="w-9 h-9 rounded-full"
+                  />
                   {isCounterpartyOnline(activeWindow, merchantId) && (
                     <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-[var(--color-bg-primary)] bg-success" />
                   )}
@@ -1239,12 +1273,12 @@ function ConversationRow({
           : "border-transparent hover:bg-white/[0.03]"
       }`}
     >
-      <div
-        className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold text-foreground"
-        style={avatarTint(c.user.username)}
-      >
-        {initials(c.user.username)}
-      </div>
+      <Avatar
+        name={c.user.username}
+        src={c.user.avatar_url}
+        className="w-10 h-10 shrink-0 rounded-full"
+        textClassName="text-[11px]"
+      />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1 min-w-0">
