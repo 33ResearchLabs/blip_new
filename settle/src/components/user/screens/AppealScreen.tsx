@@ -160,9 +160,9 @@ export function AppealScreen({
 
       <div className="px-5 pb-10 space-y-4">
         {/* Need help? banner */}
-        <div className="rounded-2xl p-4 flex gap-3 bg-warning-dim border border-warning-border">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-warning/15">
-            <ShieldAlert className="w-5 h-5 text-warning" />
+        <div className={`rounded-2xl p-4 flex gap-3 ${CARD}`}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-surface-active">
+            <ShieldAlert className="w-5 h-5 text-text-secondary" />
           </div>
           <div className="min-w-0">
             <p className="text-[14px] font-semibold text-text-primary mb-0.5">Need help?</p>
@@ -243,14 +243,14 @@ export function AppealScreen({
                   type="button"
                   onClick={() => onReasonChange(r.key)}
                   className={`w-full flex items-start gap-3 rounded-xl p-3.5 text-left border transition-colors ${
-                    on ? "border-warning bg-warning-dim" : "border-border-subtle bg-surface-base"
+                    on ? "border-text-primary bg-surface-active" : "border-border-subtle bg-surface-base"
                   }`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-[14px] font-semibold text-text-primary">{r.label}</p>
                       {r.escalates && (
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-warning-dim text-warning shrink-0">
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-surface-active text-text-secondary shrink-0">
                           Moderator review
                         </span>
                       )}
@@ -259,10 +259,10 @@ export function AppealScreen({
                   </div>
                   <span
                     className={`mt-0.5 shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                      on ? "border-warning" : "border-border-medium"
+                      on ? "border-text-primary" : "border-border-medium"
                     }`}
                   >
-                    {on && <span className="w-2.5 h-2.5 rounded-full bg-warning" />}
+                    {on && <span className="w-2.5 h-2.5 rounded-full bg-text-primary" />}
                   </span>
                 </button>
               );
@@ -347,9 +347,9 @@ export function AppealScreen({
         </div>
 
         {/* What happens next? — copy adapts to the selected issue group */}
-        <div className="rounded-2xl p-4 flex gap-3 bg-warning-dim border border-warning-border">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-warning/15">
-            <Lock className="w-5 h-5 text-warning" />
+        <div className={`rounded-2xl p-4 flex gap-3 ${CARD}`}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-surface-active">
+            <Lock className="w-5 h-5 text-text-secondary" />
           </div>
           <div className="min-w-0">
             <p className="text-[14px] font-semibold text-text-primary mb-0.5">What happens next?</p>

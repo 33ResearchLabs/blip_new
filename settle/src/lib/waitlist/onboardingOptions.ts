@@ -51,7 +51,7 @@ export const PAYMENT_METHOD_OPTIONS: PaymentMethodOption[] = [
   { value: 'card',   label: 'Card' },
   { value: 'cash',   label: 'Cash' },
   { value: 'mobile', label: 'Mobile money' },
-  { value: 'other',  label: 'Other' },
+  
 ];
 
 // ── Country catalogue ───────────────────────────────────────────────

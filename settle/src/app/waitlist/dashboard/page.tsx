@@ -11,7 +11,7 @@
 // fetchWithAuth, all task verifications go through the existing modals
 // (XFollowVerificationModal, TelegramVerificationModal, TweetCampaignModal).
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Loader2, LogOut, Copy, Check, Crown, Send, Repeat2, Users as UsersIcon,
@@ -19,6 +19,7 @@ import {
   Share2, MoreHorizontal, MessageCircle, Trophy, HelpCircle,
   CircleCheck, Target, Award, UserPlus, TrendingUp, ArrowRight,
   BadgeCheck, Sparkles, Rocket, Activity, Star, Sun, Moon, Link2, ChevronDown,
+  Globe, CreditCard,
 } from 'lucide-react';
 
 // Lucide ships the legacy bird-shaped Twitter glyph; X rebranded to the
@@ -39,7 +40,15 @@ function XLogo({ className }: { className?: string }) {
 import { useWaitlistTheme, useWaitlistTokens } from '@/context/WaitlistThemeContext';
 import { formatCount } from '@/lib/format';
 import { USER_BLIP_POINTS, MERCHANT_BLIP_POINTS } from '@/lib/waitlist/blipPoints';
-import { TRADE_CORRIDORS, PAYMENT_METHOD_OPTIONS } from '@/lib/waitlist/onboardingOptions';
+import {
+  COUNTRY_OPTIONS,
+  TRADE_CORRIDORS,
+  PAYMENT_METHOD_OPTIONS,
+  COMMIT_VOLUME_OPTIONS,
+  countryLabel,
+  corridorLabel,
+  paymentMethodLabel,
+} from '@/lib/waitlist/onboardingOptions';
 import { ReputationCoinBadge } from '@/components/shared/ReputationCoinBadge';
 import { readRole, forgetRole, rememberRole, loginPathForRole } from '@/lib/waitlist/roleCache';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
@@ -810,7 +819,8 @@ function MerchantLayout(props: {
         {/* LEFT COLUMN */}
         <div className="lg:col-span-6 flex flex-col gap-10 lg:gap-3">
           {/* Merchant Onboarding CTA */}
-          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${onboardDone ? 'opacity-70' : ''}`}>
+          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-5 ${onboardDone ? 'opacity-70' : ''}`}>
+           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5 min-w-0">
               <div className={`w-11 h-11 rounded-xl ${t.inputBg} border ${t.border} flex items-center justify-center shrink-0`}>
                 <Store className={`w-[18px] h-[18px] ${t.txt}`} strokeWidth={2} />
@@ -845,6 +855,9 @@ function MerchantLayout(props: {
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}
+           </div>
+
+            {!onboardDone && <MerchantOnboardForm />}
           </div>
 
           {/* Your Referral Stats — hidden on mobile (the mobile "Your
@@ -916,7 +929,7 @@ function MerchantLayout(props: {
 
         {/* MIDDLE COLUMN */}
         <div className="lg:col-span-3 flex flex-col gap-10 lg:gap-3 min-w-0">
-          <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
+          <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} isMerchant />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} compact />
         </div>
 
@@ -1040,7 +1053,7 @@ function UserLayout(props: {
           </div>
 
           {/* Invite Friends */}
-          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3`}>
+          <div className={`${t.surface} border ${t.border} ${t.cardShadow} rounded-2xl p-4  flex flex-col md:flex-row items-start md:items-center  justify-between  gap-3`}>
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-full ${t.inputBg} border ${t.border} flex items-center justify-center shrink-0`}>
                 <UsersIcon className={`w-5 h-5 ${t.txt}`} />
@@ -1073,7 +1086,7 @@ function UserLayout(props: {
 
         {/* MIDDLE — Progress + Leaderboard */}
         <div className="lg:col-span-3 flex flex-col gap-10 lg:gap-3 min-w-0">
-          <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} />
+          <ProgressGauge blipPoints={blipPoints} onShowHistory={onShowHistory} isMerchant={false} />
           <LeaderboardCard leaderboard={leaderboard} onShowHistory={onShowHistory} />
         </div>
 
@@ -1600,11 +1613,539 @@ function ReferralCodeCard({
   );
 }
 
+// ── Merchant onboarding form ────────────────────────────────────────
+// Captures the merchant's onboarding "intent" (country / trade corridors /
+// payment methods / monthly commit volume) alongside the Google Form CTA.
+// Backed by GET+PATCH /api/merchant/onboarding-intent: GET prefills the form,
+// edits stay local until the user presses "Save Details", and the submit
+// PATCHes ONLY the fields that actually changed vs. the last saved snapshot
+// (partial update). The PATCH response re-seeds both the form and the snapshot
+// (so expected_monthly_volume_usd, derived server-side from the bucket, stays
+// in sync). Option ids come from the shared onboardingOptions catalogue so UI
+// values always match the server allow-list.
+
+// Shape returned by the intent endpoint (mirrors route.ts `shape()`).
+interface OnboardIntent {
+  country_code: string | null;
+  trade_corridors: string[];
+  intended_payment_methods: string[];
+  expected_monthly_volume_usd: number | null;
+  commit_volume_bucket: string | null;
+}
+
+const EMPTY_INTENT: OnboardIntent = {
+  country_code: null,
+  trade_corridors: [],
+  intended_payment_methods: [],
+  expected_monthly_volume_usd: null,
+  commit_volume_bucket: null,
+};
+
+// Order-insensitive array equality, so reordered multi-selects don't read dirty.
+const sameSet = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join('|') === [...b].sort().join('|');
+
+// Sentinel selected when the user wants to type a value not in the catalogue.
+// Replaced by the trimmed custom text before anything goes on the wire.
+const OTHER_VALUE = '__other__';
+const withOther = (opts: DropdownOption[]): DropdownOption[] =>
+  [...opts, { value: OTHER_VALUE, label: 'Other' }];
+
+// Reusable "Other" free-text input — shared by all four onboarding fields.
+// Collapses/expands with a smooth grid-rows height animation, themed for both
+// light and dark mode, and turns its border red when flagged invalid.
+function OtherInput({
+  show, placeholder, value, onChange, invalid,
+}: {
+  show: boolean;
+  placeholder: string;
+  value: string;
+  onChange: (v: string) => void;
+  invalid?: boolean;
+}) {
+  const t = useThemeTokens();
+  return (
+    <div
+      aria-hidden={!show}
+      className={`grid transition-all duration-200 ease-out ${show ? 'grid-rows-[1fr] opacity-100 mt-2' : 'grid-rows-[0fr] opacity-0'}`}
+    >
+      <div className="overflow-hidden">
+        <input
+          type="text"
+          value={value}
+          maxLength={50}
+          tabIndex={show ? 0 : -1}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`w-full ${t.inputBg} border rounded-xl px-3 py-3 text-[13px] font-medium ${t.txt} focus:outline-none focus:ring-2 ${t.d ? 'focus:ring-white/15' : 'focus:ring-black/10'} transition-colors ${invalid ? 'border-red-500/70' : t.border}`}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Per-field custom ("Other") text, keyed to keep the reusable input generic.
+type OtherKey = 'country' | 'corridor' | 'method' | 'volume';
+const EMPTY_OTHER: Record<OtherKey, string> = { country: '', corridor: '', method: '', volume: '' };
+
+function MerchantOnboardForm() {
+  const t = useThemeTokens();
+  const [intent, setIntent] = useState<OnboardIntent>(EMPTY_INTENT);
+  const [saved, setSaved] = useState<OnboardIntent>(EMPTY_INTENT); // last saved baseline (effective)
+  const [otherText, setOtherText] = useState<Record<OtherKey, string>>(EMPTY_OTHER);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedOk, setSavedOk] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+  const [editing, setEditing] = useState(false); // expanded form vs collapsed summary
+  // Snapshot of the form taken when entering edit mode, to restore on cancel.
+  const snapshotRef = useRef<{ intent: OnboardIntent; otherText: Record<OtherKey, string> } | null>(null);
+
+  // Prefill from the saved row. The server only returns catalogue ids, so the
+  // OTHER sentinel never arrives here — the custom inputs start hidden.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetchWithAuth('/api/merchant/onboarding-intent');
+        if (r.ok) {
+          const j = await r.json().catch(() => null);
+          if (!cancelled && j?.data) {
+            const next = { ...EMPTY_INTENT, ...j.data };
+            setIntent(next);
+            setSaved(next);
+          }
+        }
+      } catch {
+        /* offline / unauth — leave empty, form still works */
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Edit locally only; clear any prior "saved" flash so the button reactivates.
+  const update = (patch: Partial<OnboardIntent>) => {
+    setIntent((prev) => ({ ...prev, ...patch }));
+    setSavedOk(false);
+    setError(null);
+  };
+  const setOther = (key: OtherKey, v: string) => {
+    setOtherText((o) => ({ ...o, [key]: v }));
+    setSavedOk(false);
+    setError(null);
+  };
+
+  // Which "Other" inputs are currently revealed (sentinel selected).
+  const otherActive: Record<OtherKey, boolean> = {
+    country: intent.country_code === OTHER_VALUE,
+    corridor: intent.trade_corridors.includes(OTHER_VALUE),
+    method: intent.intended_payment_methods.includes(OTHER_VALUE),
+    volume: intent.commit_volume_bucket === OTHER_VALUE,
+  };
+  // Any revealed custom input left empty (after trim) blocks submission.
+  const isEmptyOther = (k: OtherKey) => otherActive[k] && otherText[k].trim().length === 0;
+  const otherInvalid =
+    isEmptyOther('country') || isEmptyOther('corridor') || isEmptyOther('method') || isEmptyOther('volume');
+
+  // Effective payload: OTHER sentinel replaced by the trimmed custom value.
+  const subSingle = (v: string | null, key: OtherKey): string | null =>
+    v === OTHER_VALUE ? (otherText[key].trim() || null) : v;
+  const subMulti = (arr: string[], key: OtherKey): string[] =>
+    arr.map((v) => (v === OTHER_VALUE ? otherText[key].trim() : v)).filter((v) => v.length > 0);
+
+  const effective: OnboardIntent = {
+    country_code: subSingle(intent.country_code, 'country'),
+    trade_corridors: subMulti(intent.trade_corridors, 'corridor'),
+    intended_payment_methods: subMulti(intent.intended_payment_methods, 'method'),
+    commit_volume_bucket: subSingle(intent.commit_volume_bucket, 'volume'),
+    expected_monthly_volume_usd: intent.expected_monthly_volume_usd,
+  };
+
+  // Diff effective selections against the saved baseline — only changed fields
+  // go on the wire (partial update).
+  const buildPatch = (): Partial<OnboardIntent> => {
+    const patch: Partial<OnboardIntent> = {};
+    if (effective.country_code !== saved.country_code) patch.country_code = effective.country_code;
+    if (!sameSet(effective.trade_corridors, saved.trade_corridors)) patch.trade_corridors = effective.trade_corridors;
+    if (!sameSet(effective.intended_payment_methods, saved.intended_payment_methods)) patch.intended_payment_methods = effective.intended_payment_methods;
+    if (effective.commit_volume_bucket !== saved.commit_volume_bucket) patch.commit_volume_bucket = effective.commit_volume_bucket;
+    return patch;
+  };
+  const dirty = Object.keys(buildPatch()).length > 0;
+
+  const submit = async () => {
+    if (otherInvalid) {
+      setShowErrors(true);
+      setError('Please fill in the "Other" field before saving.');
+      return;
+    }
+    const patch = buildPatch();
+    if (!Object.keys(patch).length) return;
+    setSaving(true);
+    setError(null);
+    setSavedOk(false);
+    setShowErrors(false);
+    try {
+      const r = await fetchWithAuth('/api/merchant/onboarding-intent', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j?.success) {
+        setError("Couldn't save your details. Please try again.");
+        return;
+      }
+      // New baseline = the effective values we just sent. We keep the user's
+      // local selections + custom text on screen (rather than re-seeding from
+      // the server) so typed "Other" values don't disappear after saving.
+      setSaved(effective);
+      setSavedOk(true);
+      setEditing(false); // collapse to the saved summary
+    } catch {
+      setError("Couldn't save your details. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Volume readout: representative USD for the selected catalogue bucket
+  // (hidden for a custom "Other" volume, which has no mapped figure).
+  const bucketUsd =
+    intent.commit_volume_bucket && intent.commit_volume_bucket !== OTHER_VALUE
+      ? COMMIT_VOLUME_OPTIONS.find((b) => b.id === intent.commit_volume_bucket)?.usd ?? null
+      : null;
+
+  // Enter / leave the editor. Cancel restores the pre-edit snapshot so partial
+  // changes are discarded.
+  const openEdit = () => {
+    snapshotRef.current = { intent, otherText };
+    setShowErrors(false);
+    setError(null);
+    setEditing(true);
+  };
+  const cancelEdit = () => {
+    if (snapshotRef.current) {
+      setIntent(snapshotRef.current.intent);
+      setOtherText(snapshotRef.current.otherText);
+    }
+    setShowErrors(false);
+    setError(null);
+    setEditing(false);
+  };
+
+  // Collapsed "submitted" view: shown once the merchant has saved details and
+  // isn't actively editing. Hides the dropdowns behind a compact summary.
+  const hasSavedData = !!(
+    saved.country_code ||
+    saved.trade_corridors.length ||
+    saved.intended_payment_methods.length ||
+    saved.commit_volume_bucket
+  );
+  if (!loading && hasSavedData && !editing) {
+    const volLabel = saved.commit_volume_bucket
+      ? COMMIT_VOLUME_OPTIONS.find((b) => b.id === saved.commit_volume_bucket)?.label ?? saved.commit_volume_bucket
+      : null;
+    const summary = [
+      saved.country_code ? countryLabel(saved.country_code) : null,
+      saved.trade_corridors.length ? saved.trade_corridors.map(corridorLabel).join(', ') : null,
+      saved.intended_payment_methods.length ? saved.intended_payment_methods.map(paymentMethodLabel).join(', ') : null,
+      volLabel,
+    ].filter(Boolean).join('  ·  ');
+
+    return (
+      <div className={`mt-5 pt-5 border-t ${t.divider} flex items-start justify-between gap-3 flex-wrap`}>
+        <div className="flex items-start gap-2.5 min-w-0">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className={`text-[13px] font-semibold ${t.txt}`}>Onboarding details saved</p>
+            <p className={`text-[12px] ${t.muted} leading-snug break-words`}>{summary || 'Your preferences are saved.'}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={openEdit}
+          className={`${t.inputBg} border ${t.border} ${t.txt} px-4 py-2 rounded-full text-[12px] font-semibold ${t.hov} transition shrink-0`}
+        >
+          Edit details
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`mt-5 pt-5 border-t ${t.divider}`}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+        {/* Choose Country — single select, custom replaces the selection */}
+        <div>
+          <OnboardDropdown
+            label="Choose Country"
+            icon={Globe}
+            placeholder="Select Country"
+            disabled={loading}
+            options={withOther(COUNTRY_OPTIONS.map((c) => ({ value: c.code, label: c.label, flag: c.flag })))}
+            value={intent.country_code}
+            onChange={(v) => { update({ country_code: v }); if (v !== OTHER_VALUE) setOther('country', ''); }}
+          />
+          <OtherInput
+            show={otherActive.country}
+            placeholder="Enter country name"
+            value={otherText.country}
+            onChange={(v) => setOther('country', v)}
+            invalid={showErrors && isEmptyOther('country')}
+          />
+        </div>
+
+        {/* Trade Corridors — multi select, custom is added alongside */}
+        <div>
+          <OnboardDropdown
+            multiple
+            label="Trade Corridors"
+            icon={Repeat2}
+            placeholder="Select Corridors"
+            disabled={loading}
+            options={withOther(TRADE_CORRIDORS.map((c) => ({ value: c.id, label: c.label, flag: c.flag })))}
+            values={intent.trade_corridors}
+            onChange={(v) => { update({ trade_corridors: v }); if (!v.includes(OTHER_VALUE)) setOther('corridor', ''); }}
+          />
+          <OtherInput
+            show={otherActive.corridor}
+            placeholder="Enter trade corridor"
+            value={otherText.corridor}
+            onChange={(v) => setOther('corridor', v)}
+            invalid={showErrors && isEmptyOther('corridor')}
+          />
+        </div>
+
+        {/* Payment Methods — multi select, custom is added alongside */}
+        <div>
+          <OnboardDropdown
+            multiple
+            label="Payment Methods"
+            icon={CreditCard}
+            placeholder="Select Methods"
+            disabled={loading}
+            options={withOther(PAYMENT_METHOD_OPTIONS.map((p) => ({ value: p.value, label: p.label })))}
+            values={intent.intended_payment_methods}
+            onChange={(v) => { update({ intended_payment_methods: v }); if (!v.includes(OTHER_VALUE)) setOther('method', ''); }}
+          />
+          <OtherInput
+            show={otherActive.method}
+            placeholder="Enter payment method"
+            value={otherText.method}
+            onChange={(v) => setOther('method', v)}
+            invalid={showErrors && isEmptyOther('method')}
+          />
+        </div>
+
+        {/* Commit Volume — single select, custom replaces the selection */}
+        <div>
+          <OnboardDropdown
+            label="Commit Volume"
+            icon={TrendingUp}
+            placeholder="Select Commit Volume"
+            disabled={loading}
+            options={withOther(COMMIT_VOLUME_OPTIONS.map((b) => ({ value: b.id, label: b.label })))}
+            value={intent.commit_volume_bucket}
+            onChange={(v) => { update({ commit_volume_bucket: v }); if (v !== OTHER_VALUE) setOther('volume', ''); }}
+          />
+          <OtherInput
+            show={otherActive.volume}
+            placeholder="Enter commit volume"
+            value={otherText.volume}
+            onChange={(v) => setOther('volume', v)}
+            invalid={showErrors && isEmptyOther('volume')}
+          />
+          {/* Informational only — representative USD figure, not editable. */}
+          {bucketUsd != null && !otherActive.volume && (
+            <p className={`mt-1.5 text-[11px] ${t.sub} tabular-nums`}>
+              ≈ ${formatCount(bucketUsd)} / month
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Save row — status on the left, submit button on the right. */}
+      <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-h-[18px] text-[11px]">
+          {error ? (
+            <span className="text-red-500">{error}</span>
+          ) : savedOk && !dirty ? (
+            <span className="text-emerald-500 inline-flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Details saved
+            </span>
+          ) : dirty ? (
+            <span className={t.sub}>You have unsaved changes</span>
+          ) : null}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {hasSavedData && (
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saving}
+              className={`${t.inputBg} border ${t.border} ${t.txt} px-4 py-2.5 rounded-full text-[12px] font-semibold ${t.hov} transition disabled:opacity-50`}
+            >
+              Cancel
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={submit}
+            disabled={loading || saving || !dirty}
+            className={`${t.accentBg} ${t.accentText} px-5 py-2.5 rounded-full text-[12px] font-semibold tracking-tight inline-flex items-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed ${dirty && !saving ? 'hover:-translate-y-[1px] active:scale-[0.99]' : ''}`}
+          >
+            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            {saving ? 'Saving…' : 'Save Details'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Custom dropdown (not a native <select>): native <option> lists render with
+// the OS/browser's own colors — an unstyleable white box even in dark mode.
+// A button + popover listbox lets every surface use the waitlist theme tokens,
+// so the open menu reads correctly in both dark and light mode. Supports both
+// single-select (closes on pick) and multi-select (toggles, stays open).
+// Keyboard (Arrow/Enter/Escape) + outside-click + touch are all handled.
+type DropdownOption = { value: string; label: string; flag?: string };
+
+type OnboardDropdownProps = {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  placeholder: string;
+  options: DropdownOption[];
+  disabled?: boolean;
+} & (
+  | { multiple?: false; value: string | null; onChange: (v: string) => void; values?: never }
+  | { multiple: true; values: string[]; onChange: (v: string[]) => void; value?: never }
+);
+
+function OnboardDropdown(props: OnboardDropdownProps) {
+  const { label, icon: Icon, placeholder, options, disabled } = props;
+  const t = useThemeTokens();
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const isSelected = (v: string) =>
+    props.multiple ? props.values.includes(v) : props.value === v;
+
+  const choose = (v: string) => {
+    if (props.multiple) {
+      const next = props.values.includes(v)
+        ? props.values.filter((x) => x !== v)
+        : [...props.values, v];
+      props.onChange(next); // stays open for further toggles
+    } else {
+      props.onChange(v);
+      setOpen(false);
+      setActive(-1);
+    }
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) { setOpen(true); return; }
+      setActive((i) => Math.min(options.length - 1, i + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive((i) => Math.max(0, i - 1));
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (open && active >= 0) choose(options[active].value);
+      else setOpen((o) => !o);
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+    }
+  };
+
+  // Button label: joined labels for multi, single label otherwise.
+  const display = props.multiple
+    ? (props.values.length
+        ? props.values.map((v) => options.find((o) => o.value === v)?.label ?? v).join(', ')
+        : placeholder)
+    : (options.find((o) => o.value === props.value)?.label ?? placeholder);
+  const hasValue = props.multiple ? props.values.length > 0 : !!props.value;
+
+  const activeBg = t.d ? 'bg-white/10' : 'bg-black/[0.05]';
+
+  return (
+    <div>
+      <label className={`block text-[12px] font-medium ${t.muted} mb-1.5`}>{label}</label>
+      <div className="relative" ref={ref}>
+        <button
+          type="button"
+          role="combobox"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={label}
+          disabled={disabled}
+          onClick={() => !disabled && setOpen((o) => !o)}
+          onKeyDown={onKeyDown}
+          className={`w-full ${t.inputBg} border ${t.border} rounded-xl pl-3 pr-3 py-3 flex items-center gap-2.5 ${t.hov} focus:outline-none focus:ring-2 ${t.d ? 'focus:ring-white/15' : 'focus:ring-black/10'} transition ${disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+        >
+          <Icon className={`w-4 h-4 shrink-0 ${t.sub}`} />
+          <span className={`flex-1 text-left truncate text-[13px] font-medium ${hasValue ? t.txt : t.sub}`}>
+            {display}
+          </span>
+          <ChevronDown className={`w-4 h-4 shrink-0 ${t.sub} transition-transform ${open ? 'rotate-180' : ''}`} />
+        </button>
+
+        {open && (
+          <ul
+            role="listbox"
+            aria-label={label}
+            aria-multiselectable={props.multiple || undefined}
+            className={`absolute z-50 left-0 right-0 mt-1.5 max-h-60 overflow-auto rounded-xl border ${t.border} ${t.surface} shadow-xl py-1 scrollbar-hide`}
+          >
+            {options.map((o, i) => {
+              const selected = isSelected(o.value);
+              return (
+                <li
+                  key={o.value}
+                  role="option"
+                  aria-selected={selected}
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => choose(o.value)}
+                  className={`px-3.5 py-2.5 text-[13px] cursor-pointer flex items-center gap-2 ${t.txt} ${active === i ? activeBg : ''} ${selected ? 'font-semibold' : 'font-medium'}`}
+                >
+                  {o.flag && <span className="shrink-0">{o.flag}</span>}
+                  <span className="flex-1 truncate">{o.label}</span>
+                  {selected && <Check className={`w-3.5 h-3.5 shrink-0 ${t.txt}`} strokeWidth={2.5} />}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Progress gauge — half-circle SVG (no recharts). Source: MerchantDashboard.tsx
 // lines 1866–1985.
-function ProgressGauge({ blipPoints, onShowHistory }: { blipPoints: number; onShowHistory: () => void }) {
+function ProgressGauge({ blipPoints, onShowHistory, isMerchant }: { blipPoints: number; onShowHistory: () => void; isMerchant?: boolean }) {
   const t = useThemeTokens();
-  const milestones = [100, 250, 500, 1000, 2500];
+  const milestones = isMerchant
+    ? [1000, 2000, 5000, 7000, 10000]
+    : [200, 500, 1000, 2000, 5000];
   const next = milestones.find((m) => m > blipPoints) ?? milestones[milestones.length - 1];
   const prev = [0, ...milestones].filter((m) => m <= blipPoints).pop() ?? 0;
   const span = Math.max(1, next - prev);
@@ -1676,7 +2217,7 @@ function ProgressGauge({ blipPoints, onShowHistory }: { blipPoints: number; onSh
                   }}
                 />
                 <span className={`text-[12.5px] font-semibold ${achieved ? t.txt : t.muted} tabular-nums tracking-tight`}>
-                  {formatCount(m)} coins
+                  {formatCount(m)} pts
                 </span>
               </div>
               {achieved && <Check className={`w-3.5 h-3.5 ${t.txt}`} strokeWidth={2.5} />}
