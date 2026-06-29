@@ -11,9 +11,10 @@
 // parent page can refresh its list.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { X, Loader2, Check, AlertTriangle, Mail, MapPin, Briefcase, Wallet, Clock, Award, TrendingUp, Network, Users } from 'lucide-react';
+import { X, Loader2, Check, AlertTriangle, Mail, MapPin, Briefcase, Wallet, Clock, Award, TrendingUp, Network, Users, Globe, CreditCard } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { formatCount, formatFiat, formatRate } from '@/lib/format';
+import { corridorLabel, paymentMethodLabel } from '@/lib/waitlist/onboardingOptions';
 import { RiskBadge } from './RiskBadge';
 import { HypothesisChip } from './HypothesisChip';
 import type {
@@ -39,6 +40,8 @@ interface DetailPayload {
     business_category: string | null;
     expected_monthly_volume_usd: number | null;
     country_code: string | null;
+    trade_corridors: string[] | null;
+    intended_payment_methods: string[] | null;
   };
   referred_by: {
     id: string;
@@ -324,6 +327,12 @@ function OverviewTab({ data }: { data: DetailPayload }) {
                                                           ? formatFiat(a.expected_monthly_volume_usd, 'USD')
                                                           : '—' },
       { icon: MapPin,    label: 'Country',           value: a.country_code ?? '—' },
+      { icon: Globe,     label: 'Trade corridors',   value: a.trade_corridors && a.trade_corridors.length
+                                                          ? a.trade_corridors.map(corridorLabel).join(', ')
+                                                          : '—' },
+      { icon: CreditCard,label: 'Payment methods',   value: a.intended_payment_methods && a.intended_payment_methods.length
+                                                          ? a.intended_payment_methods.map(paymentMethodLabel).join(', ')
+                                                          : '—' },
     );
   }
 

@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, forbiddenResponse, errorResponse } from '@/lib/middleware/auth';
 import { queryOne, transaction } from '@/lib/db';
 import { setupWaitlistForActor } from '@/lib/waitlist/signup';
+import { sanitizeCorridorIds, sanitizePaymentMethodValues } from '@/lib/waitlist/onboardingOptions';
 import { defaultAvatarUrl } from '@/lib/avatars';
 import { MOCK_MODE, MOCK_INITIAL_BALANCE } from '@/lib/config/mockMode';
 import { checkRateLimit, STANDARD_LIMIT } from '@/lib/middleware/rateLimit';
@@ -56,6 +57,8 @@ export async function POST(request: NextRequest) {
     ? body.expected_monthly_volume_usd
     : null;
   const countryCode = typeof body.country_code === 'string' ? body.country_code.trim().toUpperCase().slice(0, 8) : null;
+  const tradeCorridors = sanitizeCorridorIds(body.trade_corridors);
+  const intendedPaymentMethods = sanitizePaymentMethodValues(body.intended_payment_methods);
 
   // Source user row (we'll copy email + password_hash + wallet from here).
   const sourceUser = await queryOne<UserSourceRow>(
@@ -104,8 +107,9 @@ export async function POST(request: NextRequest) {
         `INSERT INTO merchants (
             email, password_hash, business_name, display_name,
             status, is_online, balance, email_verified, avatar_url,
-            wallet_address, business_category, expected_monthly_volume_usd, country_code
-          ) VALUES ($1, $2, $3, $4, 'active', false, $5, $6, $7, $8, $9, $10, $11)
+            wallet_address, business_category, expected_monthly_volume_usd, country_code,
+            trade_corridors, intended_payment_methods
+          ) VALUES ($1, $2, $3, $4, 'active', false, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING id`,
         [
           sourceUser.email,
@@ -119,6 +123,8 @@ export async function POST(request: NextRequest) {
           businessCategory,
           expectedVolume,
           countryCode,
+          tradeCorridors,
+          intendedPaymentMethods,
         ],
       );
       return ins.rows[0];

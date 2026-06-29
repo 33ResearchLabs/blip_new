@@ -39,6 +39,7 @@ function XLogo({ className }: { className?: string }) {
 import { useWaitlistTheme, useWaitlistTokens } from '@/context/WaitlistThemeContext';
 import { formatCount } from '@/lib/format';
 import { USER_BLIP_POINTS, MERCHANT_BLIP_POINTS } from '@/lib/waitlist/blipPoints';
+import { TRADE_CORRIDORS, PAYMENT_METHOD_OPTIONS } from '@/lib/waitlist/onboardingOptions';
 import { ReputationCoinBadge } from '@/components/shared/ReputationCoinBadge';
 import { readRole, forgetRole, rememberRole, loginPathForRole } from '@/lib/waitlist/roleCache';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
@@ -2585,6 +2586,11 @@ function UpgradeModal({ actorType, onClose, onSuccess }: {
   const [category, setCategory] = useState('p2p_trader');
   const [volume, setVolume] = useState('');
   const [country, setCountry] = useState('');
+  const [corridors, setCorridors] = useState<string[]>([]);
+  const [payMethods, setPayMethods] = useState<string[]>([]);
+
+  const toggle = (list: string[], set: (v: string[]) => void, id: string) =>
+    set(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   async function submit() {
     setError(null); setSubmitting(true);
@@ -2593,7 +2599,9 @@ function UpgradeModal({ actorType, onClose, onSuccess }: {
       const body = actorType === 'user'
         ? { business_name: businessName.trim(), business_category: category,
             expected_monthly_volume_usd: volume ? Number(volume.replace(/[^\d.]/g, '')) : null,
-            country_code: country.trim().toUpperCase() || null }
+            country_code: country.trim().toUpperCase() || null,
+            trade_corridors: corridors,
+            intended_payment_methods: payMethods }
         : {};
       const res = await fetchWithAuth(endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2609,7 +2617,7 @@ function UpgradeModal({ actorType, onClose, onSuccess }: {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div className={`relative w-full max-w-md ${surface} border ${border} rounded-2xl p-6`} onClick={(e) => e.stopPropagation()}>
+      <div className={`relative w-full max-w-md ${surface} border ${border} rounded-2xl p-6 max-h-[90vh] overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
         <h3 className={`text-lg font-semibold mb-1 ${txt}`}>
           {actorType === 'user' ? 'Become a merchant' : 'Also join as user'}
         </h3>
@@ -2638,6 +2646,34 @@ function UpgradeModal({ actorType, onClose, onSuccess }: {
             <input type="text" placeholder="Country code (e.g. IN)" value={country}
               onChange={(e) => setCountry(e.target.value.toUpperCase())} maxLength={8}
               className={`w-full ${inputBg} border ${border} rounded-md px-3 py-2 text-sm font-mono uppercase ${txt}`} />
+            <div>
+              <div className={`text-[11px] font-medium mb-1.5 ${muted}`}>Trade corridors</div>
+              <div className="flex flex-wrap gap-1.5">
+                {TRADE_CORRIDORS.map((c) => {
+                  const on = corridors.includes(c.id);
+                  return (
+                    <button key={c.id} type="button" onClick={() => toggle(corridors, setCorridors, c.id)}
+                      className={`px-2.5 py-1 rounded-full text-xs border transition ${on ? `${accentBg} ${accentText} border-transparent` : `${border} ${muted} ${hov}`}`}>
+                      {c.flag} {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <div className={`text-[11px] font-medium mb-1.5 ${muted}`}>Payment methods</div>
+              <div className="flex flex-wrap gap-1.5">
+                {PAYMENT_METHOD_OPTIONS.map((p) => {
+                  const on = payMethods.includes(p.value);
+                  return (
+                    <button key={p.value} type="button" onClick={() => toggle(payMethods, setPayMethods, p.value)}
+                      className={`px-2.5 py-1 rounded-full text-xs border transition ${on ? `${accentBg} ${accentText} border-transparent` : `${border} ${muted} ${hov}`}`}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
         {error && <div className="text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded p-3 mb-3">{error}</div>}
