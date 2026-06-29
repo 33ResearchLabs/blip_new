@@ -137,7 +137,13 @@ export async function GET(request: NextRequest) {
       )
     `;
 
-    const queryParams: (string | number | boolean)[] = [merchantId, hasComplianceAccess];
+    // Compliance reviewers may see ALL disputed orders — but ONLY in the
+    // explicit dispute tab (MerchantChatTabs requests tab='dispute'). The
+    // default chat inbox must be a merchant's OWN trades and nothing else;
+    // without this scoping, a compliance-access merchant's inbox leaks every
+    // disputed order in the system (other parties' chats they aren't part of).
+    const complianceDisputeScope = hasComplianceAccess && tab === 'dispute';
+    const queryParams: (string | number | boolean)[] = [merchantId, complianceDisputeScope];
     let paramIndex = 3;
 
     // Filter by order status
