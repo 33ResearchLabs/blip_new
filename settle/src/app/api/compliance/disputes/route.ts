@@ -147,8 +147,11 @@ export async function GET(request: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const disputes = (result as any[]).map(row => {
-      // Build lifecycle timeline with time deltas
-      const events = lifecycleByOrder[row.id] || [];
+      // Build lifecycle timeline with time deltas.
+      // Only real status transitions belong on the timeline — warning/notification
+      // events (e.g. expiry_warning) carry new_status=NULL and would otherwise
+      // render as an unlabeled "ghost" step in OrderLifecycle.
+      const events = (lifecycleByOrder[row.id] || []).filter((ev: any) => ev.new_status);
       const lifecycle = events.map((ev: any, i: number) => {
         const prevTime = i === 0 ? new Date(row.created_at) : new Date(events[i - 1].created_at);
         const currTime = new Date(ev.created_at);

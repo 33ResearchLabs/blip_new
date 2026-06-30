@@ -47,10 +47,12 @@ function formatDate(ts: string): string {
 export default function OrderLifecycle({ events }: OrderLifecycleProps) {
   if (!events || events.length === 0) return null;
 
-  // Deduplicate consecutive events with same status (e.g., double dispute events)
-  const deduped = events.filter(
-    (ev, i) => i === 0 || ev.status !== events[i - 1].status
-  );
+  // Drop non-status events (e.g. expiry_warning carries no status) so they
+  // never render as an unlabeled "ghost" step, then deduplicate consecutive
+  // events with the same status (e.g., double dispute events).
+  const deduped = events
+    .filter((ev) => ev.status)
+    .filter((ev, i, arr) => i === 0 || ev.status !== arr[i - 1].status);
 
   return (
     <div className="mt-3 pt-3 border-t border-border">
