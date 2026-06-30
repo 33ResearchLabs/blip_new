@@ -65,6 +65,18 @@ export interface AtomicFinalizeDisputeInput {
   /** Optional on-chain hashes if compliance already settled outside the system. */
   releaseTxHash?: string;
   refundTxHash?: string;
+  /**
+   * When true, the DB finalization is REFUSED unless the matching on-chain
+   * settlement hash is present for an order that locked escrow on-chain
+   * ('merchant' → refundTxHash, 'user' → releaseTxHash). This enforces the
+   * "no DB finalization before blockchain confirmation" contract.
+   *
+   * Defaults to false to preserve the historical mechanism-only behaviour
+   * (and existing unit tests). The POLICY of when to require settlement lives
+   * in the compliance finalize route, which sets this true for escrowed
+   * orders in real (non-mock) mode.
+   */
+  requireSettlementTx?: boolean;
 }
 
 export interface AtomicFinalizeDisputeResult {
@@ -93,7 +105,7 @@ function escrowActionForResolution(resolution: DisputeResolution): 'release' | '
 export async function atomicFinalizeDispute(
   input: AtomicFinalizeDisputeInput
 ): Promise<AtomicFinalizeDisputeResult> {
-  const { orderId, resolution, complianceMember, notes, releaseTxHash, refundTxHash } = input;
+  const { orderId, resolution, complianceMember, notes, releaseTxHash, refundTxHash, requireSettlementTx } = input;
   const newStatus = statusForResolution(resolution);
   const escrowAction = escrowActionForResolution(resolution);
 
@@ -118,6 +130,21 @@ export async function atomicFinalizeDispute(
       const transitionCheck = validateTransition(order.status, newStatus, 'system');
       if (!transitionCheck.valid) {
         throw new Error('STATUS_TRANSITION_INVALID');
+      }
+
+      // ── 1b. Settlement-tx gate (no DB finalize before chain confirmation) ─
+      // For an order that locked escrow ON-CHAIN, in real mode the DB may not
+      // be flipped to a terminal state until the matching settlement tx has
+      // landed. The caller (compliance finalize route) sets requireSettlementTx
+      // for escrowed real-mode orders; mock-mode and never-escrowed orders pass
+      // requireSettlementTx=false and are unaffected.
+      if (requireSettlementTx && order.escrow_tx_hash) {
+        if (resolution === 'merchant' && !refundTxHash) {
+          throw new Error('SETTLEMENT_TX_REQUIRED:refund');
+        }
+        if (resolution === 'user' && !releaseTxHash) {
+          throw new Error('SETTLEMENT_TX_REQUIRED:release');
+        }
       }
 
       // ── 2. Refund branch: credit escrow_debited_entity_id ────────────
@@ -481,6 +508,16 @@ export async function atomicFinalizeDispute(
     }
     if (errMsg === 'STATUS_TRANSITION_INVALID' || errMsg === 'STATUS_CHANGED_CONCURRENT') {
       return { success: false, error: 'Order status changed — finalization no longer valid. Refresh and retry.' };
+    }
+    if (errMsg.startsWith('SETTLEMENT_TX_REQUIRED')) {
+      const kind = errMsg.split(':')[1] ?? 'settlement';
+      logger.warn('[Atomic] Dispute finalize refused — on-chain settlement tx required first', {
+        orderId, kind,
+      });
+      return {
+        success: false,
+        error: `On-chain ${kind} must be settled and confirmed before this dispute can be finalized.`,
+      };
     }
     if (errMsg === 'REFUND_TARGET_NOT_FOUND') {
       return { success: false, error: 'Escrow-debited entity not found — cannot refund. Investigate manually.' };

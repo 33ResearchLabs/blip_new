@@ -859,3 +859,76 @@ describe('real mode — refund does NOT credit the DB cache (on-chain is source 
     )).toBeTruthy();
   });
 });
+
+describe('requireSettlementTx — no DB finalize before on-chain settlement', () => {
+  test('escrowed order, resolution=merchant, no refundTxHash → REFUSED', async () => {
+    const state: ClientState = { orderRow: sellOrderUserSeller, balance: 500 };
+    let captured: any[] = [];
+    mockTransaction.mockImplementation(async (cb: any) => {
+      const c = createClient(state);
+      try { const out = await cb(c); captured = c.calls; return out; }
+      catch (e) { captured = c.calls; throw e; }
+    });
+
+    const r = await atomicFinalizeDispute({
+      orderId: 'order-sell-1',
+      resolution: 'merchant',
+      complianceMember: COMPLIANCE,
+      requireSettlementTx: true,
+    });
+
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/must be settled and confirmed/);
+    // Refused BEFORE any balance/status mutation.
+    expect(captured.find(c => /SET balance = balance \+/.test(c.text))).toBeUndefined();
+    expect(captured.find(c => /^\s*UPDATE orders/.test(c.text))).toBeUndefined();
+  });
+
+  test('escrowed order, resolution=user, no releaseTxHash → REFUSED', async () => {
+    const state: ClientState = { orderRow: sellOrderUserSeller, balance: 500 };
+    mockTransaction.mockImplementation(asTxRunner(state));
+
+    const r = await atomicFinalizeDispute({
+      orderId: 'order-sell-1',
+      resolution: 'user',
+      complianceMember: COMPLIANCE,
+      requireSettlementTx: true,
+    });
+
+    expect(r.success).toBe(false);
+    expect(r.error).toMatch(/must be settled and confirmed/);
+  });
+
+  test('escrowed order, resolution=merchant, WITH refundTxHash → proceeds', async () => {
+    const state: ClientState = { orderRow: sellOrderUserSeller, balance: 500 };
+    mockTransaction.mockImplementation(asTxRunner(state));
+
+    const r = await atomicFinalizeDispute({
+      orderId: 'order-sell-1',
+      resolution: 'merchant',
+      complianceMember: COMPLIANCE,
+      requireSettlementTx: true,
+      refundTxHash: 'refund-tx-confirmed',
+    });
+
+    expect(r.success).toBe(true);
+  });
+
+  test('order that never locked escrow (escrow_tx_hash null) → not blocked even with flag', async () => {
+    const noEscrowOrder = {
+      ...sellOrderUserSeller,
+      escrow_tx_hash: null,
+    };
+    const state: ClientState = { orderRow: noEscrowOrder, balance: 500 };
+    mockTransaction.mockImplementation(asTxRunner(state));
+
+    const r = await atomicFinalizeDispute({
+      orderId: 'order-sell-1',
+      resolution: 'merchant',
+      complianceMember: COMPLIANCE,
+      requireSettlementTx: true,
+    });
+
+    expect(r.success).toBe(true);
+  });
+});
