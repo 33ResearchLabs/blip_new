@@ -235,88 +235,114 @@ export function useDisputeManagement(
     }
   };
 
-  // Finalize dispute - forcibly resolve and handle escrow
+  // Finalize dispute — blockchain-first: settle on-chain, THEN finalize the DB.
+  //
+  // Phase-1 ordering fix. Previously the DB was finalized first and the
+  // on-chain settlement attempted afterwards (and could be silently skipped),
+  // which could mark a dispute "resolved" while funds stayed locked on-chain.
+  // Now, for an escrowed order in real mode we settle on-chain FIRST and only
+  // finalize the DB with the confirmed tx hash. The human compliance-wallet
+  // signature remains the settlement path (fallback) until the backend arbiter
+  // lands in Phase 2.
   const finalizeDispute = async () => {
     if (!member || !selectedDispute || !resolveForm.resolution) return;
+    if (resolveForm.resolution === "split") {
+      addNotification("dispute", "Split resolution is not supported.", selectedDispute.id);
+      return;
+    }
 
-    const canDoOnChain = member.wallet_address && solanaWallet.connected && solanaWallet.walletAddress === member.wallet_address;
+    const mockMode = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
+    const hasOnChainEscrow = !!selectedDispute.escrow?.tradeId;
+    const canDoOnChain =
+      member.wallet_address &&
+      solanaWallet.connected &&
+      solanaWallet.walletAddress === member.wallet_address;
+
+    // Real-mode escrowed disputes must settle on-chain before the DB is touched.
+    const needsOnChain = hasOnChainEscrow && !mockMode;
+
+    let releaseTxHash: string | undefined;
+    let refundTxHash: string | undefined;
+
+    if (needsOnChain) {
+      if (!canDoOnChain) {
+        addNotification(
+          "dispute",
+          "Connect your registered compliance wallet to settle this dispute on-chain before finalizing.",
+          selectedDispute.id,
+        );
+        return;
+      }
+      if (!selectedDispute.escrow?.creatorWallet) {
+        addNotification("dispute", "Missing on-chain escrow details for this order.", selectedDispute.id);
+        return;
+      }
+
+      setIsProcessingOnChain(true);
+      try {
+        const resolutionType = resolveForm.resolution === "user" ? "release_to_buyer" : "refund_to_seller";
+        addNotification("system", `Settling dispute on-chain (${resolutionType})...`, selectedDispute.id);
+
+        const result = await solanaWallet.resolveDispute({
+          creatorPubkey: selectedDispute.escrow.creatorWallet,
+          tradeId: selectedDispute.escrow.tradeId,
+          resolution: resolutionType,
+        });
+
+        if (!result.success || !result.txHash) {
+          throw new Error("Dispute resolution failed");
+        }
+
+        if (resolveForm.resolution === "user") releaseTxHash = result.txHash;
+        else refundTxHash = result.txHash;
+
+        addNotification("resolution", `On-chain settled: ${result.txHash.slice(0, 8)}...`, selectedDispute.id);
+      } catch (chainError) {
+        setIsProcessingOnChain(false);
+        const errorMsg = chainError instanceof Error ? chainError.message : "Unknown error";
+        const hint =
+          errorMsg.includes("authority") || errorMsg.includes("signer") || errorMsg.includes("constraint")
+            ? " Your wallet may not be a registered arbiter."
+            : "";
+        addNotification(
+          "dispute",
+          `On-chain settlement failed: ${errorMsg}.${hint} Order remains disputed; nothing was finalized.`,
+          selectedDispute.id,
+        );
+        return; // do NOT finalize the DB if on-chain settlement failed
+      } finally {
+        setIsProcessingOnChain(false);
+      }
+    }
 
     try {
+      const settledHash = releaseTxHash || refundTxHash;
+      const idempotencyKey = settledHash
+        ? txAnchoredKey(settledHash, "dispute_finalize")
+        : `dispute_finalize:${selectedDispute.id}:${resolveForm.resolution}`;
+
       const res = await fetchWithAuth(`/api/compliance/disputes/${selectedDispute.id}/finalize`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": idempotencyKey,
+        },
         body: JSON.stringify({
           resolution: resolveForm.resolution,
           notes: resolveForm.notes,
           complianceId: member.id,
+          release_tx_hash: releaseTxHash,
+          refund_tx_hash: refundTxHash,
         }),
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // If wallet-connected and there's escrow to process, attempt on-chain action
-        if (canDoOnChain && data.data?.escrowDetails) {
-          setIsProcessingOnChain(true);
-          const escrow = data.data.escrowDetails;
-
-          try {
-            if (resolveForm.resolution === "user" || resolveForm.resolution === "merchant") {
-              const resolutionType = resolveForm.resolution === "user" ? "release_to_buyer" : "refund_to_seller";
-              addNotification("system", `Resolving dispute on-chain (${resolutionType})...`, selectedDispute.id);
-
-              const result = await solanaWallet.resolveDispute({
-                creatorPubkey: escrow.escrow_creator_wallet,
-                tradeId: escrow.escrow_trade_id,
-                resolution: resolutionType,
-              });
-
-              if (result.success && result.txHash) {
-                addNotification("resolution", `On-chain dispute resolved: ${result.txHash.slice(0, 8)}...`, selectedDispute.id);
-
-                // Dispute resolution releases escrow — financial transition
-                // requires Idempotency-Key. Anchor on the on-chain
-                // resolution signature so a network-retried PATCH collapses
-                // on the backend.
-                await fetchWithAuth(`/api/orders/${selectedDispute.id}/escrow`, {
-                  method: "PATCH",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Idempotency-Key": txAnchoredKey(result.txHash, "dispute_resolution"),
-                  },
-                  body: JSON.stringify({
-                    tx_hash: result.txHash,
-                    actor_type: "system",
-                    actor_id: member.id,
-                  }),
-                });
-              } else {
-                throw new Error("Dispute resolution failed");
-              }
-            }
-          } catch (chainError) {
-            console.error("[Compliance] On-chain operation failed:", chainError);
-            const errorMsg = chainError instanceof Error ? chainError.message : "Unknown error";
-            if (errorMsg.includes("authority") || errorMsg.includes("signer") || errorMsg.includes("constraint")) {
-              addNotification("dispute", `On-chain failed: Wallet may not have program authority. Manual processing required.`, selectedDispute.id);
-            } else {
-              addNotification("dispute", `On-chain operation failed: ${errorMsg}`, selectedDispute.id);
-            }
-
-          } finally {
-            setIsProcessingOnChain(false);
-          }
-        } else if (data.data?.escrowDetails) {
-
-          addNotification("system", `Escrow details logged to console for manual processing`, selectedDispute.id);
-        }
-
         const resolutionText =
           resolveForm.resolution === "user"
             ? "in favor of user (escrow released)"
-            : resolveForm.resolution === "merchant"
-              ? "in favor of merchant (escrow refunded)"
-              : "with split";
+            : "in favor of merchant (escrow refunded)";
         addNotification("resolution", `Dispute #${selectedDispute.orderNumber} FINALIZED ${resolutionText}`, selectedDispute.id);
 
         setShowResolveModal(false);
@@ -329,7 +355,7 @@ export function useDisputeManagement(
       }
     } catch (error) {
       console.error("Failed to finalize dispute:", error);
-      setIsProcessingOnChain(false);
+      addNotification("dispute", "Failed to finalize dispute. Check your connection and try again.", selectedDispute.id);
     }
   };
 
