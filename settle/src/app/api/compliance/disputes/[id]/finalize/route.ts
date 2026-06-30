@@ -6,6 +6,8 @@ import { requireAuth } from '@/lib/middleware/auth';
 import { checkRateLimit, STRICT_LIMIT } from '@/lib/middleware/rateLimit';
 import { atomicFinalizeDispute, DisputeResolution } from '@/lib/orders/atomicFinalizeDispute';
 import { getVoteTally } from '@/lib/compliance/voting';
+import { requireIdempotencyKey } from '@/lib/idempotency';
+import { MOCK_MODE } from 'settlement-core';
 
 async function hasComplianceAccess(auth: { actorType: string; merchantId?: string }): Promise<boolean> {
   if (auth.actorType === 'compliance' || auth.actorType === 'system') return true;
@@ -49,26 +51,68 @@ export async function POST(
     );
   }
 
+  // Finalize moves real funds — require an Idempotency-Key. The deeper
+  // double-finalize backstop is atomicFinalizeDispute's status + order_version
+  // + ledger ON CONFLICT guards; this header makes retries explicit/safe.
+  const idemMissing = requireIdempotencyKey(request);
+  if (idemMissing) return idemMissing;
+
   try {
     const { id: orderId } = await params;
     const body = await request.json();
     const {
-      resolution, // 'user' | 'merchant' | 'split'
-      complianceId,
+      resolution, // 'user' | 'merchant'
+      complianceId, // legacy/body — validated against the authenticated actor, never trusted alone
       notes,
       release_tx_hash, // Optional: If compliance already released on-chain
       refund_tx_hash,  // Optional: If compliance already refunded on-chain
       force,           // Single-officer override (bypass the >50% / 4h vote)
     } = body;
 
-    if (!resolution || !complianceId) {
+    // ── Bind the acting officer to the AUTHENTICATED actor ───────────────
+    // Never trust a body-supplied complianceId for attribution/authz: derive
+    // it from the verified token. Compliance tokens carry the compliance_team
+    // id as actorId; merchant-compliance carries the merchant id. 'system' is
+    // internal-only and may pass an explicit id.
+    const authComplianceId =
+      auth.actorType === 'compliance' ? auth.actorId
+      : auth.actorType === 'merchant' ? (auth.merchantId ?? auth.actorId)
+      : auth.actorType === 'system' ? (complianceId ?? auth.actorId)
+      : null;
+
+    if (!authComplianceId) {
       return NextResponse.json(
-        { success: false, error: 'Resolution and complianceId are required' },
+        { success: false, error: 'Compliance identity could not be established from the token' },
+        { status: 403 }
+      );
+    }
+    // If the client still sends a complianceId it MUST equal the authenticated
+    // actor — blocks one officer acting/voting as another. 'system' is exempt.
+    if (complianceId && auth.actorType !== 'system' && complianceId !== authComplianceId) {
+      return NextResponse.json(
+        { success: false, error: 'complianceId does not match the authenticated actor' },
+        { status: 403 }
+      );
+    }
+
+    if (!resolution) {
+      return NextResponse.json(
+        { success: false, error: 'Resolution is required' },
         { status: 400 }
       );
     }
 
-    if (!['user', 'merchant', 'split'].includes(resolution)) {
+    // 'split' is out of scope (Phase 1): the deployed escrow program cannot
+    // split a single escrow between two recipients, and the in-system finalize
+    // would otherwise release 100% as if the buyer won. Reject explicitly.
+    if (resolution === 'split') {
+      return NextResponse.json(
+        { success: false, error: 'Split resolution is not supported' },
+        { status: 400 }
+      );
+    }
+
+    if (!['user', 'merchant'].includes(resolution)) {
       return NextResponse.json(
         { success: false, error: 'Invalid resolution type' },
         { status: 400 }
@@ -91,7 +135,7 @@ export async function POST(
 
     const teamResult = await query(
       `SELECT id, name, role FROM compliance_team WHERE id = $1 AND is_active = true`,
-      [complianceId]
+      [authComplianceId]
     );
     if (teamResult.length > 0) {
       complianceMember = teamResult[0] as { id: string; name: string; role: string };
@@ -100,7 +144,7 @@ export async function POST(
       const merchantResult = await query(
         `SELECT id, display_name FROM merchants
          WHERE id = $1 AND status = 'active' AND has_compliance_access = true`,
-        [complianceId]
+        [authComplianceId]
       );
       if (merchantResult.length > 0) {
         const m = merchantResult[0] as { id: string; display_name: string };
@@ -124,7 +168,7 @@ export async function POST(
     // only for 404 fast-fail and to surface escrow detail in the response.
     const disputeResult = await query(
       `SELECT d.id as dispute_id, o.id as order_id, o.status as order_status,
-              o.crypto_amount, o.user_id, o.merchant_id,
+              o.crypto_amount, o.user_id, o.merchant_id, o.buyer_merchant_id,
               o.escrow_tx_hash, o.escrow_trade_id, o.escrow_trade_pda,
               o.escrow_pda, o.escrow_creator_wallet,
               u.wallet_address as user_wallet,
@@ -150,6 +194,7 @@ export async function POST(
       crypto_amount: string;
       user_id: string;
       merchant_id: string;
+      buyer_merchant_id: string | null;
       escrow_tx_hash: string | null;
       escrow_trade_id: number | null;
       escrow_trade_pda: string | null;
@@ -158,6 +203,43 @@ export async function POST(
       user_wallet: string | null;
       merchant_wallet: string | null;
     };
+
+    // ── Conflict of interest ─────────────────────────────────────────
+    // The acting officer must not be a party to the trade they are resolving.
+    // Catches a merchant-with-compliance-access who is the buyer/seller of
+    // this very order trying to refund/release to themselves.
+    const tradeParties = [dispute.user_id, dispute.merchant_id, dispute.buyer_merchant_id].filter(Boolean);
+    if (tradeParties.includes(authComplianceId)) {
+      return NextResponse.json(
+        { success: false, error: 'Conflict of interest: you are a party to this dispute and cannot resolve it' },
+        { status: 403 }
+      );
+    }
+
+    // ── Settlement-before-finalize gate ───────────────────────────────
+    // For an order that locked escrow ON-CHAIN, in real (non-mock) mode the DB
+    // must not be flipped to a terminal state until the matching settlement tx
+    // has landed. Require the hash up front (clean 400) and also pass the flag
+    // so atomicFinalizeDispute re-enforces it under the row lock.
+    const hasOnChainEscrow = !!dispute.escrow_tx_hash;
+    const requireSettlementTx = hasOnChainEscrow && !MOCK_MODE;
+    if (requireSettlementTx) {
+      const needsHash =
+        (resolution === 'merchant' && !refund_tx_hash) ||
+        (resolution === 'user' && !release_tx_hash);
+      if (needsHash) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'On-chain settlement required first — resolve the escrow on-chain and provide the ' +
+              (resolution === 'merchant' ? 'refund_tx_hash' : 'release_tx_hash') +
+              ' before finalizing this dispute.',
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     // ── Resolution mode (audit, non-blocking) ─────────────────────────
     // A compliance officer can resolve directly (single-officer "force" — the
@@ -186,6 +268,7 @@ export async function POST(
       notes,
       releaseTxHash: release_tx_hash,
       refundTxHash: refund_tx_hash,
+      requireSettlementTx,
     });
 
     if (!result.success || !result.order) {
@@ -213,7 +296,7 @@ export async function POST(
     // Audit: mark a single-officer "force" resolution (not backed by a >50% vote).
     if (wasForced) {
       await query(`UPDATE disputes SET force_resolved_by = $1 WHERE order_id = $2`,
-        [complianceId, orderId]).catch(() => {});
+        [authComplianceId, orderId]).catch(() => {});
     }
 
     // Best-effort real-time push. The notification_outbox row was already
@@ -238,7 +321,7 @@ export async function POST(
       resolution,
       escrowAction: result.escrowAction,
       newOrderStatus: result.newStatus,
-      complianceId,
+      complianceId: authComplianceId,
       complianceName: complianceMember.name,
       refundedTo: result.refundedTo ?? null,
     });
