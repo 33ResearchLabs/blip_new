@@ -88,7 +88,49 @@ function prune(now: number): void {
   }
 }
 
+// ── Chat-message toast dedup (isolated store) ──────────────────────────────
+// Chat toasts are deduped by messageId across the two chat transports (the
+// dashboard WS path and the Pusher private-channel path). Kept in a SEPARATE
+// bounded store from the order-event map above so a burst of order events can
+// never evict a chat key (via the hard-cap prune) before its duplicate copy
+// arrives. Same TTL window.
+const CHAT_MAX_ENTRIES = 500;
+const seenChat = new Map<string, number>();
+
+/**
+ * Returns true if this chat messageId was already toasted within the TTL — i.e.
+ * a duplicate delivery the caller should drop. A null/undefined id is never a
+ * duplicate (caller keeps whatever fallback it has).
+ */
+export function isDuplicateChatToast(messageId: string | null | undefined): boolean {
+  if (!messageId) return false;
+  const now = Date.now();
+  const last = seenChat.get(messageId);
+  if (last !== undefined && now - last < TTL_MS) {
+    seenChat.set(messageId, now);
+    return true;
+  }
+  seenChat.set(messageId, now);
+  if (seenChat.size > CHAT_MAX_ENTRIES) pruneChat(now);
+  return false;
+}
+
+function pruneChat(now: number): void {
+  for (const [k, t] of seenChat) {
+    if (now - t > TTL_MS) seenChat.delete(k);
+  }
+  if (seenChat.size > CHAT_MAX_ENTRIES) {
+    const iter = seenChat.keys();
+    while (seenChat.size > CHAT_MAX_ENTRIES) {
+      const oldest = iter.next().value;
+      if (!oldest) break;
+      seenChat.delete(oldest);
+    }
+  }
+}
+
 /** Test/debug helper — clears all recorded identities. */
 export function __resetRealtimeDedup(): void {
   seen.clear();
+  seenChat.clear();
 }

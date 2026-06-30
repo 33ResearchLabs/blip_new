@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Loader2, Check, AlertCircle, Shield } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
@@ -134,6 +134,23 @@ export function MerchantProfileModal({
     return () => document.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
 
+  // The parent keeps this modal mounted between opens (it hides via `isOpen`),
+  // so the useState initializers only run once. Without this, a draft typed in a
+  // previous session lingers and the preview/selection can be stale on reopen.
+  // Refresh from props on each open transition ONLY (a ref-gated check) so we
+  // never wipe in-progress edits when props change while the modal is open.
+  const wasOpenRef = useRef(false);
+  useEffect(() => {
+    if (isOpen && !wasOpenRef.current) {
+      setBio(currentBio || '');
+      setPreviewUrl(currentAvatar || null);
+      setSelectedPreset(currentAvatar || null);
+      setError(null);
+      setSuccess(false);
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen, currentBio, currentAvatar]);
+
   const handlePresetSelect = async (avatarUrl: string) => {
     setSelectedPreset(avatarUrl);
     setPreviewUrl(avatarUrl);
@@ -162,7 +179,10 @@ export function MerchantProfileModal({
     } catch (err) {
       console.error('Update error:', err);
       setError(err instanceof Error ? err.message : 'Update failed');
+      // Revert BOTH the selection and the preview so a failed save doesn't keep
+      // showing the avatar that wasn't actually persisted.
       setSelectedPreset(currentAvatar || null);
+      setPreviewUrl(currentAvatar || null);
     } finally {
       setIsUploading(false);
     }

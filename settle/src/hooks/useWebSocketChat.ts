@@ -577,9 +577,17 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   // message arrives both via Pusher and via this catch-up fetch.
   // Pre-migration: getOrderMessagesAfterSeq returns [] (self-healing), so this
   // is a no-op and nothing breaks.
+  const reconnectPrevConnectedRef = useRef(false);
   useEffect(() => {
     if (!pusher) return;
-    if (!pusher.isConnected) return;
+    const isPusherConnected = pusher.isConnected;
+    const wasConnected = reconnectPrevConnectedRef.current;
+    reconnectPrevConnectedRef.current = isPusherConnected;
+    if (!isPusherConnected) return;
+    // Only run on an actual reconnect transition (false -> true), not on every
+    // re-render while already connected (which issued a redundant after_seq
+    // fetch per subscribed order each time).
+    if (wasConnected) return;
     if (lastSeqRef.current.size === 0) return;
 
     let cancelled = false;
