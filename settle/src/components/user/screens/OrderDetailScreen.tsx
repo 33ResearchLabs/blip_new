@@ -3043,13 +3043,12 @@ export const OrderDetailScreen = ({
               Cancel & Refund
             </button>
           )}
-        {/* APPEAL is available once the order is accepted — through every active
-            stage up to payment_sent, including the transitional escrow_pending /
-            payment_pending states. Escalation to a dispute still requires locked
-            escrow, but the peer appeal + mutual cancel are available from
-            acceptance on. Falls back to `status` when dbStatus isn't populated
-            (the merchant side reads the raw status, so keep parity here). */}
-        {["accepted", "escrow_pending", "escrowed", "payment_pending", "payment_sent"].includes(
+        {/* APPEAL is available only once escrow is LOCKED — escrowed /
+            payment_pending / payment_sent. Pre-escrow (accepted / escrow_pending)
+            nothing is at stake, so the exit is Cancel during matching, not an
+            appeal. Falls back to `status` when dbStatus isn't populated (the
+            merchant side reads the raw status, so keep parity here). */}
+        {["escrowed", "payment_pending", "payment_sent"].includes(
           (activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),
         ) && (
             <button

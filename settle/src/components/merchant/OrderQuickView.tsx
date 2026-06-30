@@ -4405,17 +4405,17 @@ export function OrderQuickView({
                       )}
 
                       {/* Raise Appeal (first) + Need Help. Appeal is available
-                        once the order is accepted (accepted / escrowed /
-                        payment_sent) — opening it pauses the auto-cancel timers
-                        and starts the peer-resolution flow. Need Help is always
-                        available on an active order. */}
+                        only once escrow is LOCKED (escrowed / payment_sent) —
+                        pre-escrow there are no funds at stake, so Cancel is the
+                        correct exit. Opening an appeal pauses the auto-cancel
+                        timers and starts the peer-resolution flow. Need Help is
+                        always available on an active order. */}
                       {isActiveOrder &&
                         (() => {
                           const st =
                             (selectedOrder.dbOrder as any)?.status ||
                             (selectedOrder.dbOrder as any)?.minimal_status;
                           const showAppeal = [
-                            "accepted",
                             "escrowed",
                             "payment_sent",
                           ].includes(st) && !qvAppealActive;

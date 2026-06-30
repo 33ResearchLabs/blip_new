@@ -29,7 +29,10 @@ const APPEAL_TIMEOUT_MINUTES = (() => {
   return Math.min(1440, Math.max(1, raw));
 })();
 
-const APPEAL_OPEN_STATUSES = ['accepted', 'escrowed', 'payment_sent'];
+// Appeals open only once escrow is LOCKED (escrowed / payment_sent). Pre-escrow
+// (status 'accepted') no funds are at stake — Cancel is the correct exit — and
+// allowing it would let an escalation create an empty, compliance-only dispute.
+const APPEAL_OPEN_STATUSES = ['escrowed', 'payment_sent'];
 
 // Stages on which each peer resolution is allowed.
 //   complete (release crypto to buyer) → only after fiat is sent (mirrors CONFIRM_PAYMENT).
@@ -240,7 +243,7 @@ export const appealRoutes: FastifyPluginAsync = async (fastify) => {
             statusCode: 400,
             body: {
               success: false,
-              error: 'Appeals can only be opened on an active order (accepted, escrowed, or payment_sent).',
+              error: 'Appeals can only be opened once escrow is locked (escrowed or payment_sent).',
               code: 'INVALID_STATUS_FOR_APPEAL',
             },
           };

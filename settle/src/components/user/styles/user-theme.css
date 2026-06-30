@@ -259,6 +259,15 @@
 /* Active CTA — dark-mode uses white pill + black text; flip to dark pill + white text */
 .user-scope.user-light .bg-white.text-black { background-color: #0f172a !important; color: #ffffff !important; }
 
+/* Own-message chat bubble meta (timestamp + delivery ticks). The own bubble's
+   background FLIPS per theme — white in dark mode (literal bg-white), navy in
+   light mode (the .bg-white.text-black remap above) — so the meta text colour
+   must flip too. A dedicated class is used (not a text-white/black utility,
+   which the light theme remaps to a DARK colour) so it can never be silently
+   inverted and made invisible again. Dark: dark-on-white. Light: light-on-navy. */
+.user-scope .chat-own-meta { color: rgba(0, 0, 0, 0.55); }
+.user-scope.user-light .chat-own-meta { color: rgba(255, 255, 255, 0.80) !important; }
+
 /* Glass card — light variant */
 .user-scope.user-light .glass-card {
   background: rgba(255, 255, 255, 0.6);
