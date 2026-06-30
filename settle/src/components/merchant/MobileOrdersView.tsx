@@ -574,6 +574,17 @@ function OrderCardTimer({
         <div
           onClick={onSelectOrder ? () => onSelectOrder(order) : undefined}
           role={onSelectOrder ? "button" : undefined}
+          tabIndex={onSelectOrder ? 0 : undefined}
+          onKeyDown={
+            onSelectOrder
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectOrder(order);
+                  }
+                }
+              : undefined
+          }
           style={{
             display: "flex",
             justifyContent: "space-between",

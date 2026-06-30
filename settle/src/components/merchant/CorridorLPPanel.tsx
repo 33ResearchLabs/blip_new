@@ -53,7 +53,10 @@ export function CorridorLPPanel({ merchantId }: CorridorLPPanelProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const fetchFulfillments = useCallback(async () => {
-    if (!merchantId) return;
+    if (!merchantId) {
+      setLoading(false); // don't leave the panel spinning forever before identity resolves
+      return;
+    }
     try {
       const res = await fetchWithAuth(`/api/corridor/fulfillments?provider_merchant_id=${merchantId}`);
       const json = await res.json();
