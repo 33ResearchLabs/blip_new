@@ -9,6 +9,7 @@ import { getVoteTally } from '@/lib/compliance/voting';
 import { requireIdempotencyKey } from '@/lib/idempotency';
 import { MOCK_MODE } from 'settlement-core';
 import { isBackendArbiterEnabled } from '@/lib/solana/backendArbiter';
+import { ensureBackendArbiterReady } from '@/lib/solana/backendArbiterReadiness';
 import { resolveDisputeFromBackend } from '@/lib/solana/backendResolve';
 
 async function hasComplianceAccess(auth: { actorType: string; merchantId?: string }): Promise<boolean> {
@@ -236,7 +237,13 @@ export async function POST(
       const haveHash =
         resolution === 'merchant' ? !!effectiveRefundTxHash : !!effectiveReleaseTxHash;
       if (!haveHash) {
-        if (isBackendArbiterEnabled()) {
+        // Backend settlement runs ONLY when the flag is on AND startup/runtime
+        // validation confirms the arbiter key is registered on-chain, the RPC
+        // and program id are correct, and the ArbiterSet exists. If the flag is
+        // on but validation fails, we fall back to the human-wallet path (400)
+        // and never finalize through an unverified backend arbiter.
+        const backendReady = isBackendArbiterEnabled() && (await ensureBackendArbiterReady());
+        if (backendReady) {
           // ── Backend owns settlement (Phase 2) ────────────────────────
           // Settle on-chain server-side and CONFIRM before finalizing the DB.
           if (!dispute.escrow_creator_wallet || dispute.escrow_trade_id == null) {

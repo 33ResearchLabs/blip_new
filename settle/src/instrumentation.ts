@@ -19,11 +19,14 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("../sentry.server.config");
     // Dynamic import — Turbopack keeps this out of the Edge bundle.
-    const { installNodeProcessHandlers, startReputationWorkerInDev } = await import("./instrumentation-node");
+    const { installNodeProcessHandlers, startReputationWorkerInDev, validateBackendArbiterAtStartup } = await import("./instrumentation-node");
     installNodeProcessHandlers();
     // Dev-only: `next dev` skips server.js, so start the reputation worker
     // in-process here (no-op in production — server.js spawns it there).
     startReputationWorkerInDev();
+    // Validate the backend dispute arbiter (logs READY / NOT READY / disabled).
+    // Fire-and-forget; the finalize route also re-checks per-request.
+    validateBackendArbiterAtStartup();
   } else if (process.env.NEXT_RUNTIME === "edge") {
     await import("../sentry.edge.config");
   }

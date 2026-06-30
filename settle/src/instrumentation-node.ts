@@ -96,6 +96,31 @@ export function startReputationWorkerInDev(): void {
   })();
 }
 
+/**
+ * Validate the backend dispute arbiter at server startup (observability +
+ * early fail-closed signal). Dynamically imported so the Solana deps never
+ * enter the Edge bundle. Fire-and-forget — never blocks boot. When the feature
+ * is disabled it just logs that; when enabled it checks on-chain registration
+ * and logs READY / NOT READY (the route also re-checks per-finalize).
+ */
+export function validateBackendArbiterAtStartup(): void {
+  if (!process.on) return;
+  if ((globalThis as Record<string, unknown>).__backendArbiterValidated) return;
+  (globalThis as Record<string, unknown>).__backendArbiterValidated = true;
+
+  void (async () => {
+    try {
+      const { logBackendArbiterReadinessAtStartup } = await import('@/lib/solana/backendArbiterReadiness');
+      await logBackendArbiterReadinessAtStartup();
+    } catch (err) {
+      console.warn(
+        '[instrumentation] backend arbiter validation failed to run:',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  })();
+}
+
 export async function logRouteExceptionToErrorLogs(
   err: unknown,
   request: {
