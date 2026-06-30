@@ -178,7 +178,12 @@ export function NotificationToastContainer({ position = 'top-right', topOffsetCl
     : `fixed ${positionClasses[position]} z-[100] flex flex-col gap-2 pointer-events-none w-[calc(100vw-1.5rem)] max-w-[380px]`;
 
   return (
-    <div className={containerClass}>
+    <div
+      className={containerClass}
+      role="region"
+      aria-label="Notifications"
+      aria-live="polite"
+    >
       <AnimatePresence mode="popLayout">
         {toasts.slice(0, MAX_VISIBLE).map((toast) => {
           const Icon = TOAST_ICONS[toast.type];

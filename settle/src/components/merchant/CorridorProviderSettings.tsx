@@ -47,7 +47,10 @@ export function CorridorProviderSettings({ merchantId }: CorridorProviderSetting
   const [autoAccept, setAutoAccept] = useState(true);
 
   const fetchProvider = useCallback(async () => {
-    if (!merchantId) return;
+    if (!merchantId) {
+      setLoading(false); // don't leave the panel spinning forever before identity resolves
+      return;
+    }
     try {
       const res = await fetchWithAuth(`/api/corridor/providers?merchant_id=${merchantId}`);
       const json = await res.json();

@@ -18,6 +18,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { showConfirm } from "@/context/ModalContext";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 
 export interface PaymentMethod {
@@ -551,21 +552,33 @@ export function PaymentMethodModal({
     }
   };
 
-  const handleRemoveMethod = async (id: string) => {
-    try {
-      const res = await fetchWithAuth(
-        `/api/merchant/${merchantId}/payment-methods?method_id=${id}`,
-        {
-          method: "DELETE",
-        },
-      );
-      const json = await res.json();
-      if (res.ok && json.success) {
-        setPaymentMethods(paymentMethods.filter((m) => m.id !== id));
-      }
-    } catch {
-      // Silent fail — method stays in UI
-    }
+  const handleRemoveMethod = (id: string) => {
+    // Confirm before deleting — a mis-tap previously removed a receiving account
+    // a merchant relies on, with no undo.
+    showConfirm(
+      "Remove payment method?",
+      "This account will be removed and can no longer receive fiat for your trades.",
+      async () => {
+        try {
+          const res = await fetchWithAuth(
+            `/api/merchant/${merchantId}/payment-methods?method_id=${id}`,
+            {
+              method: "DELETE",
+            },
+          );
+          const json = await res.json().catch(() => ({}));
+          if (res.ok && json.success) {
+            setPaymentMethods((prev) => prev.filter((m) => m.id !== id));
+          } else {
+            // Previously: silent — the row stayed and the merchant assumed it deleted.
+            setError(json.error || "Couldn't remove the payment method. Please try again.");
+          }
+        } catch {
+          setError("Couldn't remove the payment method. Please try again.");
+        }
+      },
+      { variant: "warning", confirmLabel: "Remove", cancelLabel: "Keep" },
+    );
   };
 
   const handleSetDefault = async (id: string) => {
@@ -578,14 +591,17 @@ export function PaymentMethodModal({
           body: JSON.stringify({ method_id: id }),
         },
       );
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (res.ok && json.success) {
-        setPaymentMethods(
-          paymentMethods.map((m) => ({ ...m, is_default: m.id === id })),
+        setPaymentMethods((prev) =>
+          prev.map((m) => ({ ...m, is_default: m.id === id })),
         );
+      } else {
+        // Previously: silent — merchant could lock escrow expecting the wrong account.
+        setError(json.error || "Couldn't set the default account. Please try again.");
       }
     } catch {
-      // Silent fail
+      setError("Couldn't set the default account. Please try again.");
     }
   };
 
