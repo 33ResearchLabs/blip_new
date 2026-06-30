@@ -8,6 +8,8 @@ import { atomicFinalizeDispute, DisputeResolution } from '@/lib/orders/atomicFin
 import { getVoteTally } from '@/lib/compliance/voting';
 import { requireIdempotencyKey } from '@/lib/idempotency';
 import { MOCK_MODE } from 'settlement-core';
+import { isBackendArbiterEnabled } from '@/lib/solana/backendArbiter';
+import { resolveDisputeFromBackend } from '@/lib/solana/backendResolve';
 
 async function hasComplianceAccess(auth: { actorType: string; merchantId?: string }): Promise<boolean> {
   if (auth.actorType === 'compliance' || auth.actorType === 'system') return true;
@@ -219,25 +221,60 @@ export async function POST(
     // ── Settlement-before-finalize gate ───────────────────────────────
     // For an order that locked escrow ON-CHAIN, in real (non-mock) mode the DB
     // must not be flipped to a terminal state until the matching settlement tx
-    // has landed. Require the hash up front (clean 400) and also pass the flag
-    // so atomicFinalizeDispute re-enforces it under the row lock.
+    // has landed and CONFIRMED. The flag is also passed to atomicFinalizeDispute
+    // so it re-enforces under the row lock.
     const hasOnChainEscrow = !!dispute.escrow_tx_hash;
     const requireSettlementTx = hasOnChainEscrow && !MOCK_MODE;
+
+    // Hashes that will be recorded on the order. Start from whatever the caller
+    // supplied (human-compliance-wallet flow); the backend arbiter may fill
+    // them in below when the feature is enabled.
+    let effectiveReleaseTxHash: string | undefined = release_tx_hash;
+    let effectiveRefundTxHash: string | undefined = refund_tx_hash;
+
     if (requireSettlementTx) {
-      const needsHash =
-        (resolution === 'merchant' && !refund_tx_hash) ||
-        (resolution === 'user' && !release_tx_hash);
-      if (needsHash) {
-        return NextResponse.json(
-          {
-            success: false,
-            error:
-              'On-chain settlement required first — resolve the escrow on-chain and provide the ' +
-              (resolution === 'merchant' ? 'refund_tx_hash' : 'release_tx_hash') +
-              ' before finalizing this dispute.',
-          },
-          { status: 400 }
-        );
+      const haveHash =
+        resolution === 'merchant' ? !!effectiveRefundTxHash : !!effectiveReleaseTxHash;
+      if (!haveHash) {
+        if (isBackendArbiterEnabled()) {
+          // ── Backend owns settlement (Phase 2) ────────────────────────
+          // Settle on-chain server-side and CONFIRM before finalizing the DB.
+          if (!dispute.escrow_creator_wallet || dispute.escrow_trade_id == null) {
+            return NextResponse.json(
+              { success: false, error: 'Missing on-chain escrow details — cannot settle backend-side' },
+              { status: 422 }
+            );
+          }
+          const settled = await resolveDisputeFromBackend(
+            dispute.escrow_creator_wallet,
+            dispute.escrow_trade_id,
+            resolution === 'merchant' ? 'refund_to_seller' : 'release_to_buyer',
+          );
+          if (!settled.success || !settled.txHash) {
+            // 409 when already settled on-chain (reconcile, don't re-settle);
+            // 502 for a genuine settlement failure (DB stays disputed).
+            const status = settled.alreadySettled ? 409 : 502;
+            return NextResponse.json(
+              { success: false, error: settled.error ?? 'On-chain settlement failed' },
+              { status }
+            );
+          }
+          if (resolution === 'merchant') effectiveRefundTxHash = settled.txHash;
+          else effectiveReleaseTxHash = settled.txHash;
+        } else {
+          // Phase-1 behaviour: the human-compliance-wallet client settles
+          // on-chain first and supplies the hash.
+          return NextResponse.json(
+            {
+              success: false,
+              error:
+                'On-chain settlement required first — resolve the escrow on-chain and provide the ' +
+                (resolution === 'merchant' ? 'refund_tx_hash' : 'release_tx_hash') +
+                ' before finalizing this dispute.',
+            },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -266,8 +303,8 @@ export async function POST(
       resolution: resolution as DisputeResolution,
       complianceMember,
       notes,
-      releaseTxHash: release_tx_hash,
-      refundTxHash: refund_tx_hash,
+      releaseTxHash: effectiveReleaseTxHash,
+      refundTxHash: effectiveRefundTxHash,
       requireSettlementTx,
     });
 
