@@ -581,9 +581,13 @@ export function useDashboardAuth({
             // false on every page reload and 401s short-circuit instead of
             // refreshing — see useComplianceAuth for the same fix.
             setSessionToken('cookie-session');
-            // Defer to useOrderFetching to flip isLoading off after the
-            // first orders payload lands. Safety net at 5s for slow links.
-            setTimeout(() => setIsLoading(false), 5000);
+            // Identity is restored — show the dashboard immediately. Previously
+            // this was deferred until the first orders payload (with a 5s safety
+            // net), which left an authenticated merchant staring at a full-screen
+            // spinner for up to 5s if the orders fetch was slow or hung. The
+            // order list now owns its own loading state (gated on `ordersLoaded`),
+            // so the dashboard shell can render right away without an empty flash.
+            setIsLoading(false);
             if (
               !isMockMode &&
               !freshMerchant.wallet_address &&

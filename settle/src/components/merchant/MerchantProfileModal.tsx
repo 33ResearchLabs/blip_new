@@ -130,17 +130,24 @@ export function MerchantProfileModal({
     setError(null);
     setIsUploading(true);
 
+    // If the user typed a bio but hasn't pressed Save, the 1.5s auto-close below
+    // would silently discard it. Persist it together with the avatar in one PATCH
+    // so nothing is lost. No-op (body unchanged) when the bio wasn't edited.
+    const bioChanged = bio !== (currentBio || '');
+
     try {
+      const body: Record<string, unknown> = { avatar_url: avatarUrl };
+      if (bioChanged) body.bio = bio;
       const updateRes = await fetchWithAuth(`/api/merchant/${merchantId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatar_url: avatarUrl }),
+        body: JSON.stringify(body),
       });
 
       if (!updateRes.ok) throw new Error('Failed to update profile');
 
       setSuccess(true);
-      onProfileUpdated(avatarUrl);
+      onProfileUpdated(avatarUrl, undefined, bioChanged ? bio : undefined);
       setTimeout(() => { onClose(); setSuccess(false); }, 1500);
     } catch (err) {
       console.error('Update error:', err);

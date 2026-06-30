@@ -224,6 +224,11 @@ const OrderList = memo(function OrderList({
     id: string;
   } | null>(null);
 
+  // Has the first orders fetch settled? Drives loading-vs-empty so a freshly
+  // loaded dashboard shows a spinner here (not a misleading "No pending orders")
+  // until orders arrive.
+  const ordersLoaded = useMerchantStore((s) => s.ordersLoaded);
+
   const virtualizer = useVirtualizer({
     count: filteredOrders.length,
     getScrollElement: () => parentRef.current,
@@ -235,17 +240,23 @@ const OrderList = memo(function OrderList({
     return (
       <div className="flex-1 overflow-y-auto p-1.5">
         <div className="flex flex-col items-center justify-center h-full gap-3">
-          <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
-            <TrendingUp className="w-5 h-5 text-foreground/20" />
-          </div>
-          <div className="text-center">
-            <p className="text-[11px] font-medium text-foreground/30 mb-0.5">
-              No pending orders
-            </p>
-            <p className="text-[9px] text-foreground/15 font-mono">
-              New orders from the network show here
-            </p>
-          </div>
+          {!ordersLoaded ? (
+            <Loader2 className="w-5 h-5 text-foreground/20 animate-spin" />
+          ) : (
+            <>
+              <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-foreground/20" />
+              </div>
+              <div className="text-center">
+                <p className="text-[11px] font-medium text-foreground/30 mb-0.5">
+                  No pending orders
+                </p>
+                <p className="text-[9px] text-foreground/15 font-mono">
+                  New orders from the network show here
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -1163,6 +1174,10 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
 
   useEffect(() => {
     if (!merchantId) return;
+    // myOrders only feeds the "Mine" tab list, so there's no need to fetch (let
+    // alone poll the heavy multi-status history endpoint every 15s) while the
+    // merchant is on another tab. Fetch on demand when the Mine tab is shown.
+    if (view !== "mine") return;
     let cancelled = false;
     const load = async () => {
       setMyOrdersLoading(true);
@@ -1187,7 +1202,12 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
       }
     };
     load();
-    const interval = setInterval(load, 15000);
+    const interval = setInterval(() => {
+      // Skip background ticks on a hidden tab — the load() above re-runs when the
+      // Mine tab is re-opened, so there's no staleness gap.
+      if (typeof document !== "undefined" && document.hidden) return;
+      load();
+    }, 15000);
     return () => {
       cancelled = true;
       clearInterval(interval);

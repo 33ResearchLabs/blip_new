@@ -75,7 +75,7 @@ function ResetPasswordForm() {
         return;
       }
       setSuccess(true);
-      setTimeout(() => router.push("/waitlist/merchant-login"), 3000);
+      setTimeout(() => router.push("/market/login"), 3000);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -109,7 +109,7 @@ function ResetPasswordForm() {
           body="Sign back in with your new password on every device that runs the merchant app."
         />
 
-        <EmailFlowPrimaryCta href="/waitlist/merchant-login">
+        <EmailFlowPrimaryCta href="/market/login">
           Go to merchant sign in →
         </EmailFlowPrimaryCta>
       </motion.div>
@@ -211,7 +211,7 @@ function ResetPasswordForm() {
 
       <div className="text-center pt-1">
         <Link
-          href="/waitlist/merchant-login"
+          href="/market/login"
           className="text-[11.5px] text-[#8a8a8e] hover:text-[#1d1d1f] transition-colors"
         >
           Back to sign in
