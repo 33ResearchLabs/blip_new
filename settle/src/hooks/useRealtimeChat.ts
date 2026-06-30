@@ -1208,10 +1208,6 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
       if (now - lastCall < 5000) return;
       markReadLastCallRef.current.set(window.orderId, now);
 
-      setChatWindows((prev) =>
-        prev.map((w) => (w.id === chatId ? { ...w, unread: 0 } : w)),
-      );
-
       try {
         const res = await fetchWithAuth(
           `/api/orders/${window.orderId}/messages`,
@@ -1225,6 +1221,15 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         );
         if (res.status === 403) {
           markReadBlockedRef.current.add(window.orderId);
+          return;
+        }
+        if (res.ok) {
+          // Clear the local badge only AFTER the server confirms. Clearing it
+          // optimistically (before the PATCH) caused a phantom unread: if the
+          // request failed, the badge reappeared on the next conversations poll.
+          setChatWindows((prev) =>
+            prev.map((w) => (w.id === chatId ? { ...w, unread: 0 } : w)),
+          );
         }
       } catch (error) {
         console.error("Error marking messages as read:", error);

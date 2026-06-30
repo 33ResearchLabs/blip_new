@@ -350,6 +350,16 @@ export function PaymentMethodModal({
     }
   }, [isOpen, merchantId, fetchMethods]);
 
+  // Esc closes the modal (same as the ✕ button) — keyboard parity.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
+
   // When the parent opens us in edit mode (editingMethod prop), drop into
   // the rich form pre-filled with the method's parsed values. We mirror
   // this for in-modal Pencil clicks via `startEdit` below — both paths land

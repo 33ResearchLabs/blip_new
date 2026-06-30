@@ -430,6 +430,31 @@ export function PusherProvider({ children }: PusherProviderProps) {
     }
   }, [actorType, actorId, cleanup, initPusher]);
 
+  // Resume realtime after a sustained outage. The retry loop above gives up
+  // after MAX_RETRIES, which can leave the app permanently on fallback polling
+  // even once connectivity returns. When the browser comes back online or the
+  // tab becomes visible again, re-establish — but ONLY when the socket is not
+  // already healthy, so we never tear down a working connection.
+  useEffect(() => {
+    if (!actorType || !actorId) return;
+    const tryResume = () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+      const state = pusherRef.current?.connection?.state;
+      if (state === "connected" || state === "connecting") return;
+      reconnect();
+    };
+    const onOnline = () => tryResume();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tryResume();
+    };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [actorType, actorId, reconnect]);
+
   // Subscribe to a channel
   const subscribe = useCallback((channelName: string): Channel | null => {
     const pusher = pusherRef.current;
