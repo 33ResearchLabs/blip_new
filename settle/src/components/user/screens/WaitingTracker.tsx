@@ -223,7 +223,7 @@ export function WaitingTracker({
             animate={{ y: 0, opacity: 1 }}
             className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
           >
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 relative ${tone.bg}`}>
+            <div className={`w-8 h-8 rounded-2xl flex items-center justify-center shrink-0 relative ${tone.bg}`}>
               {banner.live && (
                 <motion.div
                   className={`absolute inset-0 rounded-2xl border-2 ${tone.text} opacity-30`}
@@ -239,14 +239,14 @@ export function WaitingTracker({
                   transition={{ duration: 1.8, repeat: Infinity, ease: "easeOut" }}
                 />
               )}
-              <banner.icon className={`w-6 h-6 ${tone.text} ${banner.spin ? "animate-spin" : ""}`} />
+              <banner.icon className={`w-4 h-4 ${tone.text} ${banner.spin ? "animate-spin" : ""}`} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">{banner.title}</p>
               <p className="text-[13px] text-text-secondary leading-snug">{banner.sub}</p>
             </div>
             {(countdown || banner.live) && (
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
+              <div className="flex flex-col items-end gap-1.5 shrink-0 -mt-1">
                 {countdown && (
                   <div
                     className={`flex items-center gap-1 text-[15px] font-bold tabular-nums ${

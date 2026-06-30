@@ -272,10 +272,13 @@ export const TradeCreationScreen = ({
   // pick immediately; the order itself carries it via onSelectPaymentMethod.
   const [chosenMethod, setChosenMethod] = useState<PaymentMethodItem | null>(null);
 
-  // Pre-select the default payment method from the login-time cache so the
-  // "Receive To" row shows it immediately — without the user having to open
-  // the sheet first. SELL only: buy now uses the pay-rail multi-select, not
-  // the user's own saved account.
+  // Pre-select an ALREADY-SAVED payment method so the "Receive To" field is
+  // filled in on open — without the user having to tap the sheet first. SELL
+  // only (buy uses the pay-rail multi-select). This runs only against the
+  // user's existing saved methods from the login-time cache; if they have none
+  // saved, nothing is selected and the field keeps its placeholder. Crucially,
+  // the in-sheet PaymentMethodSelector does NOT auto-select — so opening the
+  // sheet never re-picks or auto-closes; the user can change or cancel freely.
   const { paymentMethods: cachedPaymentMethods } = useUserPaymentMethods();
   useEffect(() => {
     if (isBuy || chosenMethod || !cachedPaymentMethods.length) return;

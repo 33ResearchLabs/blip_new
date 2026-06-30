@@ -263,13 +263,13 @@ export function OrderPaymentScreen({
               <p className="text-[13px] text-text-secondary leading-snug">Please wait while the merchant secures the funds.</p>
             )}
           </div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-border-subtle shrink-0">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-success/15 shrink-0">
             <motion.span
-              className="w-1.5 h-1.5 rounded-full bg-text-secondary"
+              className="w-1.5 h-1.5 rounded-full bg-success"
               animate={{ opacity: [1, 0.3, 1] }}
               transition={{ duration: 1.4, repeat: Infinity }}
             />
-            <span className="text-[11px] font-semibold text-text-secondary">LIVE</span>
+            <span className="text-[11px] font-semibold text-success">LIVE</span>
           </div>
         </motion.div>
 
