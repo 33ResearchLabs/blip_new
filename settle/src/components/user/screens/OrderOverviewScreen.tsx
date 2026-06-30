@@ -238,7 +238,7 @@ export function OrderOverviewScreen({
           />
           {paymentLocked && paymentRows && paymentRows.length > 0 ? (
             paymentRows.map((r) => (
-              <Row key={r.label} label={r.label} value={r.value} mono={r.mono} />
+              <Row key={r.label} label={r.label} value={r.value} mono={r.mono} copyable={r.mono} />
             ))
           ) : (
             <Row
@@ -258,11 +258,18 @@ export function OrderOverviewScreen({
         <div className="rounded-2xl p-3.5 bg-surface-active border border-border-medium">
           <p className="text-[14px] font-semibold text-text-primary mb-1.5">Important Information</p>
           <ul className="space-y-1.5">
-            {[
-              "Merchant details will be shown once a seller accepts the order.",
-              "Complete payment only to the bank account displayed by the app.",
-              "Never communicate or share personal information outside the platform.",
-            ].map((tip) => (
+            {(s === "completed"
+              ? [
+                  // Once completed the first two tips no longer apply — only the
+                  // off-platform safety note stays relevant.
+                  "Never communicate or share personal information outside the platform.",
+                ]
+              : [
+                  "Merchant details will be shown once a seller accepts the order.",
+                  "Complete payment only to the payment details displayed in the app.",
+                  "Never communicate or share personal information outside the platform.",
+                ]
+            ).map((tip) => (
               <li key={tip} className="flex gap-2 text-[13px] text-text-secondary leading-snug">
                 <span className="text-text-tertiary mt-1.5 w-1 h-1 rounded-full bg-text-tertiary shrink-0" />
                 <span>{tip}</span>
@@ -374,20 +381,50 @@ function Row({
   value,
   valueClassName = "",
   mono = false,
+  copyable = false,
 }: {
   label: string;
   value: string;
   valueClassName?: string;
   mono?: boolean;
+  copyable?: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard unavailable — silently no-op.
+    }
+  };
+
   return (
     <div className="flex items-start justify-between gap-4 py-3">
       <span className="text-[14px] text-text-secondary shrink-0">{label}</span>
-      <span
-        className={`text-[14px] font-medium text-text-primary text-right ${mono ? "font-mono" : ""} ${valueClassName}`}
-      >
-        {value}
-      </span>
+      <div className="flex items-start gap-2 min-w-0 justify-end">
+        <span
+          className={`text-[14px] font-medium text-text-primary text-right ${mono ? "font-mono" : ""} ${valueClassName}`}
+        >
+          {value}
+        </span>
+        {copyable && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            aria-label={copied ? "Copied" : `Copy ${label}`}
+            className="shrink-0 mt-0.5 text-text-tertiary active:scale-90 transition-transform"
+          >
+            {copied ? (
+              <Check className="w-4 h-4 text-success" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

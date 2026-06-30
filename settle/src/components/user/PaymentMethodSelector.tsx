@@ -114,12 +114,9 @@ export const PaymentMethodSelector = ({
       .then((data) => {
         if (data.success && Array.isArray(data.data)) {
           setMethods(data.data);
-          // Auto-select the user's default if nothing selected — falls back
-          // to the first row (API already returns is_default DESC, created_at DESC).
-          if (!selectedId && data.data.length > 0) {
-            const def = data.data.find((m: PaymentMethodItem) => m.is_default) ?? data.data[0];
-            onSelect(def);
-          }
+          // NOTE: no auto-selection here. The receive method must be chosen
+          // explicitly by the user tapping a row — never picked in the
+          // background after the fetch resolves.
         }
       })
       .catch(() => {})

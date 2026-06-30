@@ -940,13 +940,15 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
         height: 56,
         borderRadius: 999,
         padding: PAD,
-        background: "var(--color-surface-hover)",
-        border: "1px solid var(--color-border-medium)",
+        // Solid track — black in light mode, white in dark mode. In the user
+        // theme --accent is white-in-light, so accent-text is the black side.
+        background: "var(--color-accent-text)",
+        border: "1px solid var(--color-accent-text)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
       }}
     >
-      {/* Subtle white-glass fill that grows behind the thumb */}
+      {/* Subtle translucent fill that grows behind the thumb — reads on accent. */}
       <motion.div
         aria-hidden
         className="absolute"
@@ -955,7 +957,7 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
           width: fillWidth,
           borderRadius: 999,
           background:
-            "linear-gradient(90deg, var(--color-border-subtle) 0%, var(--color-border-strong) 100%)",
+            "linear-gradient(90deg, rgba(128,128,128,0.15) 0%, rgba(128,128,128,0.30) 100%)",
         }}
       />
 
@@ -971,7 +973,7 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
             fontSize: 13,
             fontWeight: 800,
             letterSpacing: "-0.005em",
-            color: T.hi,
+            color: "var(--color-accent)",
           }}
         >
           {label}
@@ -980,7 +982,7 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
             transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
             style={{ display: "inline-flex" }}
           >
-            <ChevronsRight size={14} strokeWidth={2.6} style={{ color: T.md }} />
+            <ChevronsRight size={14} strokeWidth={2.6} style={{ color: "var(--color-accent)", opacity: 0.7 }} />
           </motion.span>
         </span>
       </motion.div>
@@ -998,10 +1000,12 @@ function SwipeToLock({ label, onConfirm }: { label: string; onConfirm: () => voi
           width: THUMB,
           height: THUMB,
           borderRadius: 999,
+          // Inverted thumb — accent fill (white in light, black in dark) so it
+          // stays visible against the dark/light track.
           background: "var(--color-accent)",
-          border: "1px solid var(--color-border-strong)",
+          border: "1px solid var(--color-accent)",
           boxShadow:
-            "0 6px 14px -6px rgba(20,21,26,0.18), inset 0 1px 0 rgba(255,255,255,0.85)",
+            "0 6px 14px -6px rgba(20,21,26,0.18), inset 0 1px 0 rgba(255,255,255,0.25)",
           touchAction: "pan-y",
           cursor: "grab",
         }}
