@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
@@ -54,6 +54,16 @@ export function CorridorCreateModal({
   // In-flight guard: keeps the submit button disabled + spinning while the POST
   // is running so a double-tap can't create two live corridor offers.
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Esc closes the modal (same as the Cancel/✕ buttons) — keyboard parity.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose]);
 
   return (
     <AnimatePresence>
