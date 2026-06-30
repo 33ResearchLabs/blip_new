@@ -3,7 +3,10 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useChatStatus } from "@/hooks/useChatStatus";
 import { ImagePreviewModal } from "@/components/chat/ImagePreviewModal";
-import { ImageMessageBubble, type ImageUploadStatus } from "@/components/chat/ImageMessageBubble";
+import {
+  ImageMessageBubble,
+  type ImageUploadStatus,
+} from "@/components/chat/ImageMessageBubble";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { compressImage } from "@/lib/utils/compressImage";
 import { formatFiat } from "@/lib/format";
@@ -52,7 +55,7 @@ export interface ChatViewScreenProps {
       receiptData?: Record<string, unknown> | null;
       imageUrl?: string | null;
       isRead?: boolean;
-      status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+      status?: "sending" | "sent" | "delivered" | "read" | "failed";
     }>;
   } | null;
   chatMessage: string;
@@ -83,52 +86,74 @@ export const ChatViewScreen = ({
   isCounterpartyTyping = false,
   userId,
 }: ChatViewScreenProps) => {
-  const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
+  const [pendingImage, setPendingImage] = useState<{
+    file: File;
+    previewUrl: string;
+  } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
 
   // Mutual cancel state (only relevant when order is disputed)
   const [myMutualCancel, setMyMutualCancel] = useState(false);
-  const [counterpartyMutualCancel, setCounterpartyMutualCancel] = useState(false);
+  const [counterpartyMutualCancel, setCounterpartyMutualCancel] =
+    useState(false);
   const [mutualCancelLoading, setMutualCancelLoading] = useState(false);
 
   // Poll mutual cancel state when order is disputed
   useEffect(() => {
-    if (activeOrder.status !== 'disputed') return;
+    if (activeOrder.status !== "disputed") return;
     let cancelled = false;
     const load = async () => {
       try {
-        const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute/mutual-cancel`);
+        const res = await fetchWithAuth(
+          `/api/orders/${activeOrder.id}/dispute/mutual-cancel`,
+        );
         if (!res.ok || cancelled) return;
         const data = await res.json();
         if (data?.data) {
           setMyMutualCancel(!!data.data.mutual_cancel_requested_by_user);
-          setCounterpartyMutualCancel(!!data.data.mutual_cancel_requested_by_merchant);
+          setCounterpartyMutualCancel(
+            !!data.data.mutual_cancel_requested_by_merchant,
+          );
         }
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
     };
     load();
     const interval = setInterval(load, 10000);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [activeOrder.id, activeOrder.status]);
 
-  const handleMutualCancel = async (action: 'request' | 'withdraw') => {
+  const handleMutualCancel = async (action: "request" | "withdraw") => {
     if (!userId) return;
     setMutualCancelLoading(true);
     try {
-      const res = await fetchWithAuth(`/api/orders/${activeOrder.id}/dispute/mutual-cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, actor_type: 'user', actor_id: userId }),
-      });
+      const res = await fetchWithAuth(
+        `/api/orders/${activeOrder.id}/dispute/mutual-cancel`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            actor_type: "user",
+            actor_id: userId,
+          }),
+        },
+      );
       const data = await res.json();
       if (data.success) {
-        setMyMutualCancel(action === 'request');
+        setMyMutualCancel(action === "request");
         if (data.mutualCancelComplete) {
           // Order is now cancelled — navigate back
-          setScreen('orders');
+          setScreen("orders");
         }
       }
-    } catch { /* best-effort */ } finally {
+    } catch {
+      /* best-effort */
+    } finally {
       setMutualCancelLoading(false);
     }
   };
@@ -149,7 +174,9 @@ export const ChatViewScreen = ({
     abortController: AbortController | null;
     createdAt: number; // Date.now() — for stable sort order on retry
   }
-  const [pendingUploads, setPendingUploads] = useState<Map<string, PendingUpload>>(new Map());
+  const [pendingUploads, setPendingUploads] = useState<
+    Map<string, PendingUpload>
+  >(new Map());
   const pendingUploadsRef = useRef(pendingUploads);
   pendingUploadsRef.current = pendingUploads;
 
@@ -185,43 +212,50 @@ export const ChatViewScreen = ({
   // Reset typing state when chat/order changes (prevents stuck indicator
   // from the previous chat leaking into the new one).
   useEffect(() => {
-    return () => { stopTyping(); };
+    return () => {
+      stopTyping();
+    };
   }, [activeOrder.id, stopTyping]);
 
   // Also clean up on unmount
   useEffect(() => {
-    return () => { stopTyping(); };
+    return () => {
+      stopTyping();
+    };
   }, [stopTyping]);
 
-  const handleTypingChange = useCallback((text: string) => {
-    setChatMessage(text);
-    if (!activeChat || !onTyping || !chatEnabled) return;
+  const handleTypingChange = useCallback(
+    (text: string) => {
+      setChatMessage(text);
+      if (!activeChat || !onTyping || !chatEnabled) return;
 
-    if (text.length > 0 && !isTypingRef.current) {
-      // Throttle: don't fire typing:start more than once per 2s.
-      // Prevents rapid start→stop→start cycles from flooding the network.
-      const now = Date.now();
-      if (now - lastTypingStartRef.current < 2000) return;
-      lastTypingStartRef.current = now;
-      isTypingRef.current = true;
-      onTyping(activeChat.id, true);
-    }
-    // Reset the auto-stop timer on every keystroke
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      if (isTypingRef.current && activeChat) {
+      if (text.length > 0 && !isTypingRef.current) {
+        // Throttle: don't fire typing:start more than once per 2s.
+        // Prevents rapid start→stop→start cycles from flooding the network.
+        const now = Date.now();
+        if (now - lastTypingStartRef.current < 2000) return;
+        lastTypingStartRef.current = now;
+        isTypingRef.current = true;
+        onTyping(activeChat.id, true);
+      }
+      // Reset the auto-stop timer on every keystroke
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        if (isTypingRef.current && activeChat) {
+          isTypingRef.current = false;
+          onTyping(activeChat.id, false);
+        }
+      }, 3000);
+
+      // If text is cleared, stop typing immediately
+      if (text.length === 0 && isTypingRef.current) {
         isTypingRef.current = false;
         onTyping(activeChat.id, false);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       }
-    }, 3000);
-
-    // If text is cleared, stop typing immediately
-    if (text.length === 0 && isTypingRef.current) {
-      isTypingRef.current = false;
-      onTyping(activeChat.id, false);
-      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    }
-  }, [activeChat, onTyping, chatEnabled, setChatMessage]);
+    },
+    [activeChat, onTyping, chatEnabled, setChatMessage],
+  );
 
   // Detect scroll near top → trigger loading older messages
   const handleChatScroll = useCallback(() => {
@@ -247,7 +281,9 @@ export const ChatViewScreen = ({
   }, [chatMessagesRef, onLoadOlder, hasOlderMessages, isLoadingOlder]);
 
   // Live order statuses for receipt cards — Pusher with initial fetch fallback
-  const [receiptStatuses, setReceiptStatuses] = useState<Record<string, string>>({});
+  const [receiptStatuses, setReceiptStatuses] = useState<
+    Record<string, string>
+  >({});
   const pusher = usePusherOptional();
 
   // Extract order numbers from receipt messages for status lookups + Pusher subscriptions.
@@ -257,35 +293,43 @@ export const ChatViewScreen = ({
   // (chat:receipt-updated, order:status-updated) keep statuses live in between.
   const receiptOrderIds = useRef<string[]>([]);
   const receiptOrderNumbersKey = useMemo(() => {
-    if (!activeChat?.messages) return '';
+    if (!activeChat?.messages) return "";
     const nums = new Set<string>();
     const ids = new Set<string>();
     for (const msg of activeChat.messages) {
-      if (msg.messageType === 'receipt' && msg.receiptData) {
+      if (msg.messageType === "receipt" && msg.receiptData) {
         const num = msg.receiptData.order_number as string | undefined;
         if (num) nums.add(num);
         if (activeChat.orderId) ids.add(activeChat.orderId);
         continue;
       }
       try {
-        if (msg.text.startsWith('{')) {
+        if (msg.text.startsWith("{")) {
           const parsed = JSON.parse(msg.text);
-          if (parsed.type === 'order_receipt' && parsed.data?.order_number) {
+          if (parsed.type === "order_receipt" && parsed.data?.order_number) {
             nums.add(parsed.data.order_number);
             if (activeChat.orderId) ids.add(activeChat.orderId);
           }
         }
-      } catch { /* not JSON */ }
+      } catch {
+        /* not JSON */
+      }
     }
     receiptOrderIds.current = [...ids];
-    return [...nums].sort().join(',');
+    return [...nums].sort().join(",");
   }, [activeChat?.messages, activeChat?.orderId]);
 
   useEffect(() => {
     if (!receiptOrderNumbersKey) return;
-    fetchWithAuth(`/api/orders/status?order_numbers=${encodeURIComponent(receiptOrderNumbersKey)}`)
-      .then(res => res.json())
-      .then(data => { if (data.success && data.data) setReceiptStatuses(data.data); })
+    fetchWithAuth(
+      `/api/orders/status?order_numbers=${encodeURIComponent(
+        receiptOrderNumbersKey,
+      )}`,
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data) setReceiptStatuses(data.data);
+      })
       .catch(() => {});
   }, [receiptOrderNumbersKey]);
 
@@ -300,13 +344,19 @@ export const ChatViewScreen = ({
     const handleReceiptUpdated = (rawData: unknown) => {
       const data = rawData as { orderNumber?: string; status?: string };
       if (data?.orderNumber && data?.status) {
-        setReceiptStatuses(prev => ({ ...prev, [data.orderNumber!]: data.status! }));
+        setReceiptStatuses((prev) => ({
+          ...prev,
+          [data.orderNumber!]: data.status!,
+        }));
       }
     };
     const handleStatusUpdate = (rawData: unknown) => {
       const data = rawData as { orderId: string; status: string };
       if (data.orderId && data.status) {
-        setReceiptStatuses(prev => ({ ...prev, [data.orderId]: data.status }));
+        setReceiptStatuses((prev) => ({
+          ...prev,
+          [data.orderId]: data.status,
+        }));
       }
     };
 
@@ -340,12 +390,15 @@ export const ChatViewScreen = ({
     const rawFile = e.target.files?.[0];
     if (!rawFile) return;
     if (rawFile.size > 10 * 1024 * 1024) return; // 10MB hard limit
-    if (!rawFile.type.startsWith('image/')) return;
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (!rawFile.type.startsWith("image/")) return;
+    if (fileInputRef.current) fileInputRef.current.value = "";
 
     // Compress before preview — reduces upload time and data usage.
     // compressImage is a no-op for files already under 1MB.
-    const file = await compressImage(rawFile, { maxDimension: 1600, quality: 0.8 });
+    const file = await compressImage(rawFile, {
+      maxDimension: 1600,
+      quality: 0.8,
+    });
     const previewUrl = URL.createObjectURL(file);
     setPendingImage({ file, previewUrl });
   };
@@ -358,7 +411,8 @@ export const ChatViewScreen = ({
   // Clean up preview URL on unmount
   useEffect(() => {
     return () => {
-      if (pendingImage?.previewUrl) URL.revokeObjectURL(pendingImage.previewUrl);
+      if (pendingImage?.previewUrl)
+        URL.revokeObjectURL(pendingImage.previewUrl);
     };
   }, [pendingImage]);
 
@@ -381,169 +435,192 @@ export const ChatViewScreen = ({
    *  4. On success: send real message via chat, remove pending
    *  5. On failure: mark as failed, show retry button
    */
-  const startImageUpload = useCallback(async (
-    file: File,
-    localUrl: string,
-    caption: string,
-    tempId: string,
-  ) => {
-    if (!activeChat) return;
+  const startImageUpload = useCallback(
+    async (file: File, localUrl: string, caption: string, tempId: string) => {
+      if (!activeChat) return;
 
-    const abortController = new AbortController();
+      const abortController = new AbortController();
 
-    // 30s upload timeout — prevents stuck uploads on slow/dead connections.
-    // The AbortController cancels both the signature fetch and the XHR upload.
-    const uploadTimeout = setTimeout(() => abortController.abort(), 30_000);
+      // 30s upload timeout — prevents stuck uploads on slow/dead connections.
+      // The AbortController cancels both the signature fetch and the XHR upload.
+      const uploadTimeout = setTimeout(() => abortController.abort(), 30_000);
 
-    // Insert into pending uploads (triggers optimistic UI render)
-    setPendingUploads(prev => {
-      const next = new Map(prev);
-      const existing = prev.get(tempId);
-      next.set(tempId, {
-        tempId, localUrl, caption, file,
-        status: 'uploading', progress: 0,
-        abortController,
-        createdAt: existing?.createdAt ?? Date.now(), // Preserve original time on retry
-      });
-      return next;
-    });
-
-    // Auto-scroll to bottom — but only if the user is already near the bottom.
-    // If they've scrolled up to read history, don't yank them away.
-    requestAnimationFrame(() => {
-      const el = chatMessagesRef.current;
-      if (!el) return;
-      const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-      if (isNearBottom) el.scrollTop = el.scrollHeight;
-    });
-
-    try {
-      // Step 1: Get Cloudinary signature
-      const sigRes = await fetchWithAuth('/api/upload/signature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: activeOrder.id }),
-        signal: abortController.signal,
-      });
-      if (!sigRes.ok) throw new Error('Signature request failed');
-      const sigData = await sigRes.json();
-      if (!sigData.success) throw new Error('Invalid signature');
-      const sig = sigData.data;
-
-      // Strict guard: prevent silent failures from missing credentials
-      if (!sig.signature || !sig.timestamp || !sig.apiKey || !sig.cloudName || !sig.folder) {
-        throw new Error('Incomplete upload credentials from server');
-      }
-
-      // Update progress: signature obtained
-      setPendingUploads(prev => {
+      // Insert into pending uploads (triggers optimistic UI render)
+      setPendingUploads((prev) => {
         const next = new Map(prev);
-        const entry = next.get(tempId);
-        if (entry) next.set(tempId, { ...entry, progress: 20 });
+        const existing = prev.get(tempId);
+        next.set(tempId, {
+          tempId,
+          localUrl,
+          caption,
+          file,
+          status: "uploading",
+          progress: 0,
+          abortController,
+          createdAt: existing?.createdAt ?? Date.now(), // Preserve original time on retry
+        });
         return next;
       });
 
-      // Step 2: Upload to Cloudinary
-      // ONLY send params that were signed on the backend. Sending unsigned
-      // params (allowed_formats, max_bytes) causes Cloudinary to compute a
-      // different string-to-sign → 401 "Invalid Signature".
-      // File type/size is enforced client-side (handleFileSelect) + Cloudinary
-      // upload preset (configured in dashboard).
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('signature', sig.signature);
-      formData.append('timestamp', sig.timestamp.toString());
-      formData.append('api_key', sig.apiKey);
-      formData.append('folder', sig.folder);
+      // Auto-scroll to bottom — but only if the user is already near the bottom.
+      // If they've scrolled up to read history, don't yank them away.
+      requestAnimationFrame(() => {
+        const el = chatMessagesRef.current;
+        if (!el) return;
+        const isNearBottom =
+          el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+        if (isNearBottom) el.scrollTop = el.scrollHeight;
+      });
 
-      // Cloudinary upload with XHR for progress tracking
-      const imageUrl = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`);
+      try {
+        // Step 1: Get Cloudinary signature
+        const sigRes = await fetchWithAuth("/api/upload/signature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: activeOrder.id }),
+          signal: abortController.signal,
+        });
+        if (!sigRes.ok) throw new Error("Signature request failed");
+        const sigData = await sigRes.json();
+        if (!sigData.success) throw new Error("Invalid signature");
+        const sig = sigData.data;
 
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const pct = 20 + Math.round((e.loaded / e.total) * 70); // 20-90%
-            setPendingUploads(prev => {
-              const next = new Map(prev);
-              const entry = next.get(tempId);
-              if (entry) next.set(tempId, { ...entry, progress: pct });
-              return next;
-            });
+        // Strict guard: prevent silent failures from missing credentials
+        if (
+          !sig.signature ||
+          !sig.timestamp ||
+          !sig.apiKey ||
+          !sig.cloudName ||
+          !sig.folder
+        ) {
+          throw new Error("Incomplete upload credentials from server");
+        }
+
+        // Update progress: signature obtained
+        setPendingUploads((prev) => {
+          const next = new Map(prev);
+          const entry = next.get(tempId);
+          if (entry) next.set(tempId, { ...entry, progress: 20 });
+          return next;
+        });
+
+        // Step 2: Upload to Cloudinary
+        // ONLY send params that were signed on the backend. Sending unsigned
+        // params (allowed_formats, max_bytes) causes Cloudinary to compute a
+        // different string-to-sign → 401 "Invalid Signature".
+        // File type/size is enforced client-side (handleFileSelect) + Cloudinary
+        // upload preset (configured in dashboard).
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("signature", sig.signature);
+        formData.append("timestamp", sig.timestamp.toString());
+        formData.append("api_key", sig.apiKey);
+        formData.append("folder", sig.folder);
+
+        // Cloudinary upload with XHR for progress tracking
+        const imageUrl = await new Promise<string>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open(
+            "POST",
+            `https://api.cloudinary.com/v1_1/${sig.cloudName}/image/upload`,
+          );
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = 20 + Math.round((e.loaded / e.total) * 70); // 20-90%
+              setPendingUploads((prev) => {
+                const next = new Map(prev);
+                const entry = next.get(tempId);
+                if (entry) next.set(tempId, { ...entry, progress: pct });
+                return next;
+              });
+            }
+          };
+
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              const result = JSON.parse(xhr.responseText);
+              resolve(result.secure_url);
+            } else {
+              reject(new Error(`Upload failed: ${xhr.status}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error("Network error"));
+
+          // Wire abort
+          abortController.signal.addEventListener("abort", () => xhr.abort());
+          if (abortController.signal.aborted) {
+            xhr.abort();
+            return;
           }
-        };
 
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const result = JSON.parse(xhr.responseText);
-            resolve(result.secure_url);
-          } else {
-            reject(new Error(`Upload failed: ${xhr.status}`));
-          }
-        };
-        xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send(formData);
+        });
 
-        // Wire abort
-        abortController.signal.addEventListener('abort', () => xhr.abort());
-        if (abortController.signal.aborted) { xhr.abort(); return; }
+        // Step 3: Send the real chat message with the CDN URL
+        setPendingUploads((prev) => {
+          const next = new Map(prev);
+          const entry = next.get(tempId);
+          if (entry) next.set(tempId, { ...entry, progress: 95 });
+          return next;
+        });
 
-        xhr.send(formData);
-      });
+        sendChatMessage(activeChat.id, caption || "Photo", imageUrl);
 
-      // Step 3: Send the real chat message with the CDN URL
-      setPendingUploads(prev => {
-        const next = new Map(prev);
-        const entry = next.get(tempId);
-        if (entry) next.set(tempId, { ...entry, progress: 95 });
-        return next;
-      });
-
-      sendChatMessage(activeChat.id, caption || 'Photo', imageUrl);
-
-      // Step 4: Remove from pending (the real message will appear via Pusher)
-      clearTimeout(uploadTimeout);
-      setPendingUploads(prev => {
-        const next = new Map(prev);
-        next.delete(tempId);
-        return next;
-      });
-
-    } catch (err: any) {
-      clearTimeout(uploadTimeout);
-      if (err?.name === 'AbortError' || abortController.signal.aborted) {
-        // Cancelled by user or timed out
-        setPendingUploads(prev => {
+        // Step 4: Remove from pending (the real message will appear via Pusher)
+        clearTimeout(uploadTimeout);
+        setPendingUploads((prev) => {
           const next = new Map(prev);
           next.delete(tempId);
           return next;
         });
-      } else {
-        // Failed — show retry
-        console.error('[ChatViewScreen] Image upload error:', err);
-        setPendingUploads(prev => {
-          const next = new Map(prev);
-          const entry = next.get(tempId);
-          if (entry) next.set(tempId, { ...entry, status: 'failed', progress: 0, abortController: null });
-          return next;
-        });
+      } catch (err: any) {
+        clearTimeout(uploadTimeout);
+        if (err?.name === "AbortError" || abortController.signal.aborted) {
+          // Cancelled by user or timed out
+          setPendingUploads((prev) => {
+            const next = new Map(prev);
+            next.delete(tempId);
+            return next;
+          });
+        } else {
+          // Failed — show retry
+          console.error("[ChatViewScreen] Image upload error:", err);
+          setPendingUploads((prev) => {
+            const next = new Map(prev);
+            const entry = next.get(tempId);
+            if (entry)
+              next.set(tempId, {
+                ...entry,
+                status: "failed",
+                progress: 0,
+                abortController: null,
+              });
+            return next;
+          });
+        }
       }
-    }
-  }, [activeChat, activeOrder?.id, sendChatMessage]);
+    },
+    [activeChat, activeOrder?.id, sendChatMessage],
+  );
 
   /** Called from ImagePreviewModal when user clicks Send */
-  const handleImageSend = useCallback((caption: string) => {
-    if (!pendingImage || !chatEnabled) return;
-    const tempId = `temp-img-${Date.now()}`;
-    const { file, previewUrl } = pendingImage;
-    setPendingImage(null); // Close preview modal
-    startImageUpload(file, previewUrl, caption, tempId);
-  }, [pendingImage, chatEnabled, startImageUpload]);
+  const handleImageSend = useCallback(
+    (caption: string) => {
+      if (!pendingImage || !chatEnabled) return;
+      const tempId = `temp-img-${Date.now()}`;
+      const { file, previewUrl } = pendingImage;
+      setPendingImage(null); // Close preview modal
+      startImageUpload(file, previewUrl, caption, tempId);
+    },
+    [pendingImage, chatEnabled, startImageUpload],
+  );
 
   /** Cancel an in-progress upload */
   const cancelUpload = useCallback((tempId: string) => {
     const entry = pendingUploadsRef.current.get(tempId);
     if (entry?.abortController) entry.abortController.abort();
-    setPendingUploads(prev => {
+    setPendingUploads((prev) => {
       const next = new Map(prev);
       next.delete(tempId);
       return next;
@@ -551,11 +628,14 @@ export const ChatViewScreen = ({
   }, []);
 
   /** Retry a failed upload */
-  const retryUpload = useCallback((tempId: string) => {
-    const entry = pendingUploadsRef.current.get(tempId);
-    if (!entry) return;
-    startImageUpload(entry.file, entry.localUrl, entry.caption, tempId);
-  }, [startImageUpload]);
+  const retryUpload = useCallback(
+    (tempId: string) => {
+      const entry = pendingUploadsRef.current.get(tempId);
+      if (!entry) return;
+      startImageUpload(entry.file, entry.localUrl, entry.caption, tempId);
+    },
+    [startImageUpload],
+  );
 
   const handleSend = () => {
     if (!activeChat) return;
@@ -565,7 +645,7 @@ export const ChatViewScreen = ({
     if (chatMessage.trim()) {
       stopTyping(); // Clear typing indicator on send
       sendChatMessage(activeChat.id, chatMessage.trim());
-      setChatMessage('');
+      setChatMessage("");
     }
   };
 
@@ -583,41 +663,76 @@ export const ChatViewScreen = ({
             aria-label="View merchant profile"
             className="flex items-center gap-3 flex-1 min-w-0 text-left"
           >
-          <div className="w-10 h-10 rounded-full overflow-hidden shrink-0">
-            <UserAvatar
-              src={activeOrder.merchant.avatarUrl}
-              seed={activeOrder.merchant.name || activeOrder.merchant.username}
-              size={40}
-              alt={activeOrder.merchant.name}
-            />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-[15px] font-semibold text-text-primary truncate">
-                {activeOrder.merchant.username ? `@${activeOrder.merchant.username}` : activeOrder.merchant.name}
-              </p>
-              {/* Badge reflects THIS user's role: on a buy order they're the
+            <div className="w-10 h-10 rounded-full overflow-hidden shrink-0">
+              <UserAvatar
+                src={activeOrder.merchant.avatarUrl}
+                seed={
+                  activeOrder.merchant.name || activeOrder.merchant.username
+                }
+                size={40}
+                alt={activeOrder.merchant.name}
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[15px] font-semibold text-text-primary truncate">
+                  {activeOrder.merchant.username
+                    ? `@${activeOrder.merchant.username}`
+                    : activeOrder.merchant.name}
+                </p>
+                {/* Badge reflects THIS user's role: on a buy order they're the
                   buyer (BUY), on a sell order they're the seller (SELL). */}
-              <span className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded border font-mono ${activeOrder.type === 'sell' ? 'text-orange-600 bg-orange-500/10 border-orange-500/20' : 'text-text-secondary bg-surface-card border-border-subtle'}`}>
-                {activeOrder.type === 'sell' ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownLeft className="w-2.5 h-2.5" />}
-                {activeOrder.type === 'sell' ? 'SELL' : 'BUY'}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {isCounterpartyTyping && chatEnabled ? (
-                // Typing replaces online/lastSeen — exactly like WhatsApp
-                <p className="text-[12px] text-success font-medium">typing...</p>
-              ) : (
-                <>
-                  <ConnectionIndicator isConnected={activeOrder.merchant.isOnline ?? false} />
-                  <p className={`text-[12px] ${activeOrder.merchant.isOnline ? '' : 'text-text-tertiary'}`}>
-                    {activeOrder.merchant.isOnline && <span className="text-success">{formatLastSeen(activeOrder.merchant.isOnline, activeOrder.merchant.lastSeenAt)}</span>}
-                    {!activeOrder.merchant.isOnline && formatLastSeen(activeOrder.merchant.isOnline, activeOrder.merchant.lastSeenAt)}
+                <span
+                  className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded border font-mono ${
+                    activeOrder.type === "sell"
+                      ? "text-orange-600 bg-orange-500/10 border-orange-500/20"
+                      : "text-text-secondary bg-surface-card border-border-subtle"
+                  }`}
+                >
+                  {activeOrder.type === "sell" ? (
+                    <ArrowUpRight className="w-2.5 h-2.5" />
+                  ) : (
+                    <ArrowDownLeft className="w-2.5 h-2.5" />
+                  )}
+                  {activeOrder.type === "sell" ? "SELL" : "BUY"}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {isCounterpartyTyping && chatEnabled ? (
+                  // Typing replaces online/lastSeen — exactly like WhatsApp
+                  <p className="text-[12px] text-success font-medium">
+                    typing...
                   </p>
-                </>
-              )}
+                ) : (
+                  <>
+                    <ConnectionIndicator
+                      isConnected={activeOrder.merchant.isOnline ?? false}
+                    />
+                    <p
+                      className={`text-[12px] ${
+                        activeOrder.merchant.isOnline
+                          ? ""
+                          : "text-text-tertiary"
+                      }`}
+                    >
+                      {activeOrder.merchant.isOnline && (
+                        <span className="text-success">
+                          {formatLastSeen(
+                            activeOrder.merchant.isOnline,
+                            activeOrder.merchant.lastSeenAt,
+                          )}
+                        </span>
+                      )}
+                      {!activeOrder.merchant.isOnline &&
+                        formatLastSeen(
+                          activeOrder.merchant.isOnline,
+                          activeOrder.merchant.lastSeenAt,
+                        )}
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
           </button>
           <button
             onClick={() => setScreen("order")}
@@ -629,16 +744,25 @@ export const ChatViewScreen = ({
         {/* Order summary bar */}
         <div className="mt-3 rounded-xl px-3 py-2 flex items-center justify-between bg-surface-card">
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${
-              activeOrder.status === 'complete' ? 'bg-surface-active' :
-              activeOrder.status === 'disputed' ? 'bg-error' : 'bg-surface-active'
-            }`} />
+            <div
+              className={`w-2 h-2 rounded-full ${
+                activeOrder.status === "complete"
+                  ? "bg-surface-active"
+                  : activeOrder.status === "disputed"
+                  ? "bg-error"
+                  : "bg-surface-active"
+              }`}
+            />
             <span className="text-[12px] text-text-secondary">
-              {activeOrder.type === "buy" ? "Buying" : "Selling"} {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDT
+              {activeOrder.type === "buy" ? "Buying" : "Selling"}{" "}
+              {parseFloat(activeOrder.cryptoAmount).toFixed(2)} USDT
             </span>
           </div>
           <span className="text-[12px] text-text-tertiary">
-            {formatFiat(parseFloat(activeOrder.fiatAmount), activeOrder.fiatCode)}
+            {formatFiat(
+              parseFloat(activeOrder.fiatAmount),
+              activeOrder.fiatCode,
+            )}
           </span>
         </div>
       </div>
@@ -667,18 +791,22 @@ export const ChatViewScreen = ({
         {isLoadingOlder && (
           <div className="flex items-center justify-center py-2">
             <Loader2 className="w-4 h-4 text-text-tertiary animate-spin" />
-            <span className="ml-2 text-[10px] text-text-tertiary">Loading older messages…</span>
+            <span className="ml-2 text-[10px] text-text-tertiary">
+              Loading older messages…
+            </span>
           </div>
         )}
         {!hasOlderMessages && activeChat && activeChat.messages.length > 0 && (
           <div className="text-center py-2">
-            <span className="text-[10px] text-text-quaternary">Beginning of conversation</span>
+            <span className="text-[10px] text-text-quaternary">
+              Beginning of conversation
+            </span>
           </div>
         )}
 
         {activeChat && activeChat.messages.length > 0 ? (
           activeChat.messages.map((msg) => {
-            if (msg.messageType === 'dispute') {
+            if (msg.messageType === "dispute") {
               try {
                 const data = JSON.parse(msg.text);
                 return (
@@ -686,13 +814,18 @@ export const ChatViewScreen = ({
                     <div className="w-full max-w-[90%] rounded-2xl p-4 bg-error-dim border border-error-border">
                       <div className="flex items-center gap-2 mb-2">
                         <AlertTriangle className="w-4 h-4 text-error" />
-                        <span className="text-[13px] font-semibold text-error">Dispute Opened</span>
+                        <span className="text-[13px] font-semibold text-error">
+                          Dispute Opened
+                        </span>
                       </div>
                       <p className="text-[14px] mb-1 text-text-primary">
-                        <span className="text-text-secondary">Reason:</span> {data.reason?.replace(/_/g, ' ')}
+                        <span className="text-text-secondary">Reason:</span>{" "}
+                        {data.reason?.replace(/_/g, " ")}
                       </p>
                       {data.description && (
-                        <p className="text-[13px] text-text-secondary">{data.description}</p>
+                        <p className="text-[13px] text-text-secondary">
+                          {data.description}
+                        </p>
                       )}
                     </div>
                   </div>
@@ -702,11 +835,13 @@ export const ChatViewScreen = ({
               }
             }
 
-            if (msg.messageType === 'system') {
+            if (msg.messageType === "system") {
               return (
                 <div key={msg.id} className="flex justify-center">
                   <div className="px-4 py-1.5 rounded-full bg-surface-card">
-                    <p className="text-[12px] text-text-secondary">{msg.text}</p>
+                    <p className="text-[12px] text-text-secondary">
+                      {msg.text}
+                    </p>
                   </div>
                 </div>
               );
@@ -714,38 +849,57 @@ export const ChatViewScreen = ({
 
             {
               let receiptPayload: Record<string, unknown> | null = null;
-              if (msg.messageType === 'receipt' && msg.receiptData) {
+              if (msg.messageType === "receipt" && msg.receiptData) {
                 receiptPayload = msg.receiptData;
               } else {
                 try {
-                  if (msg.text.startsWith('{')) {
+                  if (msg.text.startsWith("{")) {
                     const parsed = JSON.parse(msg.text);
-                    if (parsed.type === 'order_receipt' && parsed.data) {
+                    if (parsed.type === "order_receipt" && parsed.data) {
                       receiptPayload = parsed.data;
                     }
                   }
-                } catch { /* not JSON */ }
+                } catch {
+                  /* not JSON */
+                }
               }
               if (receiptPayload) {
-                const orderNum = receiptPayload.order_number as string | undefined;
+                const orderNum = receiptPayload.order_number as
+                  | string
+                  | undefined;
                 return (
                   <div key={msg.id} className="max-w-[90%] mx-auto">
-                    <ReceiptCard data={receiptPayload as any} currentStatus={(orderNum ? receiptStatuses[orderNum] : undefined) || activeOrder?.dbStatus || activeOrder?.status} />
+                    <ReceiptCard
+                      data={receiptPayload as any}
+                      currentStatus={
+                        (orderNum ? receiptStatuses[orderNum] : undefined) ||
+                        activeOrder?.dbStatus ||
+                        activeOrder?.status
+                      }
+                    />
                     <p className="text-[10px] mt-1 text-center text-text-tertiary">
-                      {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      {msg.timestamp.toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </p>
                   </div>
                 );
               }
             }
 
-            if (msg.from === 'system' && msg.messageType !== 'system') {
+            if (msg.from === "system" && msg.messageType !== "system") {
               return (
                 <div key={msg.id} className="flex justify-center">
                   <div className="w-full max-w-[90%] rounded-2xl px-4 py-3 bg-surface-hover border border-border-strong">
-                    <p className="text-[13px] whitespace-pre-line leading-relaxed text-text-secondary">{personalizeAppealMessage(msg.text, viewerTradeRole)}</p>
+                    <p className="text-[13px] whitespace-pre-line leading-relaxed text-text-secondary">
+                      {personalizeAppealMessage(msg.text, viewerTradeRole)}
+                    </p>
                     <p className="text-[10px] mt-1.5 text-text-tertiary">
-                      {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      {msg.timestamp.toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </p>
                   </div>
                 </div>
@@ -753,7 +907,7 @@ export const ChatViewScreen = ({
             }
 
             const isMe = msg.from === "me";
-            const isImageMsg = msg.messageType === 'image' && msg.imageUrl;
+            const isImageMsg = msg.messageType === "image" && msg.imageUrl;
 
             return (
               <div
@@ -762,40 +916,57 @@ export const ChatViewScreen = ({
               >
                 <div
                   className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
-                    isMe ? "rounded-br-md bg-white text-black" : "rounded-bl-md bg-surface-card text-text-primary"
+                    isMe
+                      ? "rounded-br-md bg-white text-black"
+                      : "rounded-bl-md bg-surface-card text-text-primary"
                   }`}
                 >
                   {isImageMsg ? (
                     <ImageMessageBubble
                       imageUrl={msg.imageUrl!}
-                      caption={msg.text !== 'Photo' ? msg.text : undefined}
+                      caption={msg.text !== "Photo" ? msg.text : undefined}
                       uploadStatus="sent"
                       isOwn={isMe}
                     />
                   ) : (
-                    <p className="text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word">{msg.text}</p>
+                    <p className="text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word">
+                      {msg.text}
+                    </p>
                   )}
-                  {/* Own messages: timestamp + ticks inherit the bubble's text
-                      color (white on the navy light-theme bubble, black on the
-                      white dark-theme bubble) so they're always legible. */}
-                  <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : ''}`}>
-                    <span className={`text-[10px] ${isMe ? 'opacity-90' : 'text-text-tertiary'}`}>
-                      {msg.timestamp.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  {/* Own-message meta (timestamp + ticks). The own bubble flips
+                      background per theme (white in dark / navy in light), so the
+                      meta colour is driven by the `chat-own-meta` class — set
+                      explicitly per theme in user-theme.css — instead of a
+                      text-white/black utility (which the light theme remaps to a
+                      dark colour and which repeatedly made this invisible). */}
+                  <div
+                    className={`flex items-center gap-1 mt-1 ${
+                      isMe ? "justify-end chat-own-meta" : ""
+                    }`}
+                  >
+                    <span
+                      className={`text-[10px] ${
+                        isMe ? "" : "text-text-tertiary"
+                      }`}
+                    >
+                      {msg.timestamp.toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </span>
-                    {isMe && (
-                      msg.status === 'sending' ? (
+                    {isMe &&
+                      (msg.status === "sending" ? (
                         <Clock className="w-3 h-3 opacity-70" />
-                      ) : msg.status === 'read' || msg.isRead ? (
+                      ) : msg.status === "read" || msg.isRead ? (
                         // ✓✓ — counterparty has READ the message (full opacity)
                         <CheckCheck className="w-3.5 h-3.5" />
-                      ) : msg.status === 'delivered' ? (
+                      ) : msg.status === "delivered" ? (
                         // ✓✓ — message DELIVERED to counterparty's device
                         <CheckCheck className="w-3.5 h-3.5 opacity-70" />
                       ) : (
                         // ✓ single — message SENT to server, not yet delivered
                         <Check className="w-3 h-3 opacity-70" />
-                      )
-                    )}
+                      ))}
                   </div>
                 </div>
               </div>
@@ -807,32 +978,33 @@ export const ChatViewScreen = ({
               <MessageCircle className="w-8 h-8 text-text-quaternary" />
             </div>
             <p className="text-[15px] text-text-tertiary">No messages yet</p>
-            <p className="text-[13px] mt-1 text-text-quaternary">Send a message to start the conversation</p>
+            <p className="text-[13px] mt-1 text-text-quaternary">
+              Send a message to start the conversation
+            </p>
           </div>
         )}
 
         {/* Pending image upload bubbles — INSIDE the scroll container so they're
             visible and auto-scroll works. Previously these were OUTSIDE the scroll
             div, making them invisible (the user couldn't see the optimistic message). */}
-        {pendingUploads.size > 0 && (
+        {pendingUploads.size > 0 &&
           Array.from(pendingUploads.values())
-          .sort((a, b) => a.createdAt - b.createdAt)
-          .map((upload) => (
-            <div key={upload.tempId} className="flex justify-end">
-              <div className="max-w-[75%] px-4 py-2.5 rounded-2xl rounded-br-md bg-white text-black">
-                <ImageMessageBubble
-                  imageUrl={upload.localUrl}
-                  caption={upload.caption || undefined}
-                  uploadStatus={upload.status}
-                  uploadProgress={upload.progress}
-                  onCancel={() => cancelUpload(upload.tempId)}
-                  onRetry={() => retryUpload(upload.tempId)}
-                  isOwn
-                />
+            .sort((a, b) => a.createdAt - b.createdAt)
+            .map((upload) => (
+              <div key={upload.tempId} className="flex justify-end">
+                <div className="max-w-[75%] px-4 py-2.5 rounded-2xl rounded-br-md bg-white text-black">
+                  <ImageMessageBubble
+                    imageUrl={upload.localUrl}
+                    caption={upload.caption || undefined}
+                    uploadStatus={upload.status}
+                    uploadProgress={upload.progress}
+                    onCancel={() => cancelUpload(upload.tempId)}
+                    onRetry={() => retryUpload(upload.tempId)}
+                    isOwn
+                  />
+                </div>
               </div>
-            </div>
-          ))
-        )}
+            ))}
       </div>
 
       {/* Full-screen image preview modal (WhatsApp-style) */}
@@ -846,33 +1018,39 @@ export const ChatViewScreen = ({
       )}
 
       {/* Mutual cancel banner — shown when order is disputed */}
-      {activeOrder.status === 'disputed' && (
+      {activeOrder.status === "disputed" && (
         <div className="shrink-0 px-4 pt-3 pb-2 bg-surface-raised border-t border-error-border">
           <div className="rounded-xl bg-error-dim border border-error-border p-3 space-y-2">
-            <p className="text-[12px] font-semibold text-error">Dispute in progress</p>
+            <p className="text-[12px] font-semibold text-error">
+              Dispute in progress
+            </p>
             {counterpartyMutualCancel && !myMutualCancel && (
-              <p className="text-[11px] text-warning">Merchant has requested to cancel — accept below to refund.</p>
+              <p className="text-[11px] text-warning">
+                Merchant has requested to cancel — accept below to refund.
+              </p>
             )}
             {myMutualCancel && !counterpartyMutualCancel && (
-              <p className="text-[11px] text-text-tertiary">Waiting for merchant to agree to cancel…</p>
+              <p className="text-[11px] text-text-tertiary">
+                Waiting for merchant to agree to cancel…
+              </p>
             )}
             <div className="flex gap-2">
               {myMutualCancel ? (
                 <button
-                  onClick={() => handleMutualCancel('withdraw')}
+                  onClick={() => handleMutualCancel("withdraw")}
                   disabled={mutualCancelLoading}
                   className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-surface-card text-text-secondary border border-border-subtle disabled:opacity-50"
                 >
-                  {mutualCancelLoading ? 'Processing…' : 'Continue Dispute'}
+                  {mutualCancelLoading ? "Processing…" : "Continue Dispute"}
                 </button>
               ) : (
                 <>
                   <button
-                    onClick={() => handleMutualCancel('request')}
+                    onClick={() => handleMutualCancel("request")}
                     disabled={mutualCancelLoading}
                     className="flex-1 py-2 rounded-lg text-[13px] font-medium bg-accent text-accent-text disabled:opacity-50"
                   >
-                    {mutualCancelLoading ? 'Processing…' : 'Cancel Dispute'}
+                    {mutualCancelLoading ? "Processing…" : "Cancel Dispute"}
                   </button>
                   <button
                     disabled
@@ -906,12 +1084,14 @@ export const ChatViewScreen = ({
               <input
                 type="text"
                 maxLength={1000}
-                placeholder={pendingImage ? "Add a caption..." : "Type a message..."}
+                placeholder={
+                  pendingImage ? "Add a caption..." : "Type a message..."
+                }
                 className="flex-1 min-w-0 appearance-none border-0 bg-transparent py-3 text-[15px] outline-none focus-visible:outline-none text-text-primary placeholder:text-text-tertiary"
                 value={chatMessage}
                 onChange={(e) => handleTypingChange(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
+                  if (e.key === "Enter") {
                     e.preventDefault();
                     handleSend();
                   }
@@ -937,13 +1117,21 @@ export const ChatViewScreen = ({
               onClick={handleSend}
               disabled={!chatMessage.trim() && !pendingImage}
               className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-50 ${
-                chatMessage.trim() || pendingImage ? 'bg-accent' : 'bg-surface-card'
+                chatMessage.trim() || pendingImage
+                  ? "bg-accent"
+                  : "bg-surface-card"
               }`}
             >
               {isUploading ? (
                 <Loader2 className="w-5 h-5 text-accent-text animate-spin" />
               ) : (
-                <Send className={`w-5 h-5 ${chatMessage.trim() || pendingImage ? 'text-accent-text' : 'text-text-quaternary'}`} />
+                <Send
+                  className={`w-5 h-5 ${
+                    chatMessage.trim() || pendingImage
+                      ? "text-accent-text"
+                      : "text-text-quaternary"
+                  }`}
+                />
               )}
             </motion.button>
           </div>
@@ -951,18 +1139,18 @@ export const ChatViewScreen = ({
       ) : (
         <div className="shrink-0 px-4 py-4 pb-8 bg-surface-raised border-t border-border-subtle">
           <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-full bg-surface-card border border-border-subtle">
-            {chatState === 'waiting' ? (
+            {chatState === "waiting" ? (
               <>
                 <Clock className="w-4 h-4 text-text-tertiary animate-pulse" />
                 <span className="text-[13px] font-medium text-text-tertiary">
-                  {chatReason || 'Waiting for counterparty to join'}
+                  {chatReason || "Waiting for counterparty to join"}
                 </span>
               </>
             ) : (
               <>
                 <MessageCircle className="w-4 h-4 text-text-quaternary" />
                 <span className="text-[13px] font-medium text-text-quaternary">
-                  {chatReason || 'Chat closed for this order'}
+                  {chatReason || "Chat closed for this order"}
                 </span>
               </>
             )}

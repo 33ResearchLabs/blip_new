@@ -13,8 +13,12 @@ import { notifyNewMessage } from '@/lib/pusher/server';
 import { wsBroadcastNewMessage } from '@/lib/websocket/broadcast';
 import { logger } from 'settlement-core';
 
-// Statuses on which an appeal may be opened — visible once the order is accepted.
-const APPEAL_OPEN_STATUSES = ['accepted', 'escrowed', 'payment_sent'];
+// Statuses on which an appeal may be opened — only once escrow is LOCKED.
+// Before escrow (status 'accepted') no funds are at stake, so there is nothing
+// to appeal/dispute; the correct pre-escrow exit is a plain Cancel. Blocking
+// 'accepted' here also stops an escalation from creating an empty,
+// compliance-only dispute on an order where no money ever moved.
+const APPEAL_OPEN_STATUSES = ['escrowed', 'payment_sent'];
 
 // Open an appeal for an order (peer-resolution stage before a dispute).
 export async function POST(
@@ -97,7 +101,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: `Cannot open an appeal from status '${minimalStatus}'. Appeals are available once an order is accepted (accepted, escrowed, or payment_sent).`,
+          error: `Cannot open an appeal from status '${minimalStatus}'. Appeals are available only once escrow is locked (escrowed or payment_sent). Before escrow, cancel the order instead.`,
           code: 'INVALID_STATUS_FOR_APPEAL',
         },
         { status: 400 }

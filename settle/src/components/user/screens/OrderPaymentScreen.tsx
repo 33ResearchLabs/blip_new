@@ -536,12 +536,14 @@ export function OrderPaymentScreen({
                 </>
               )}
             </div>
-            <button
-              onClick={onAppeal}
-              className="shrink-0 px-4 py-2 rounded-xl text-[13px] font-semibold text-error border border-error-border hover:bg-error-dim"
-            >
-              Appeal
-            </button>
+            {!appealActive && (
+              <button
+                onClick={onAppeal}
+                className="shrink-0 px-4 py-2 rounded-xl text-[13px] font-semibold text-error border border-error-border hover:bg-error-dim"
+              >
+                Appeal
+              </button>
+            )}
           </div>
         )}
 
@@ -656,19 +658,11 @@ export function OrderPaymentScreen({
               longer cancel after acceptance — the exits are Back (header),
               Raise Appeal, and Need help. Cancel is only offered BEFORE a
               merchant accepts (the matching phase). */}
-          {/* Raise Appeal — available from acceptance onward. Once escrow is
-              locked the "Need help?" card below the Payment details renders its
-              own inline Appeal, so this bottom button only shows in the pre-lock
-              (accepted / escrow_pending) state to avoid a duplicate. */}
-          {!fundsLocked && !appealActive && (
-            <button
-              onClick={onAppeal}
-              className="w-full py-3 rounded-2xl text-[14px] font-semibold text-error border border-error-border hover:bg-error-dim transition-colors flex items-center justify-center gap-2"
-            >
-              <AlertCircle className="w-4 h-4" />
-              Raise Appeal
-            </button>
-          )}
+          {/* No pre-escrow Raise Appeal here. Appeals require locked escrow —
+              before that nothing is at stake, so the exit is Cancel during the
+              matching phase, not an appeal. Once escrow is locked, the "Need
+              help?" card below the Payment details renders its own inline
+              Appeal. */}
           {/* Need help — always available support path (navigation only). */}
           <button
             onClick={onNeedHelp}
