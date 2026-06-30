@@ -252,6 +252,9 @@ export function useDisputeManagement(
     }
 
     const mockMode = process.env.NEXT_PUBLIC_MOCK_MODE === "true";
+    // When the backend arbiter is enabled, the server settles on-chain itself —
+    // the client must NOT also sign (would double-submit). Defer to the backend.
+    const backendArbiter = process.env.NEXT_PUBLIC_BACKEND_ARBITER_ENABLED === "true";
     const hasOnChainEscrow = !!selectedDispute.escrow?.tradeId;
     const canDoOnChain =
       member.wallet_address &&
@@ -259,7 +262,9 @@ export function useDisputeManagement(
       solanaWallet.walletAddress === member.wallet_address;
 
     // Real-mode escrowed disputes must settle on-chain before the DB is touched.
-    const needsOnChain = hasOnChainEscrow && !mockMode;
+    // The human compliance wallet settles client-side unless the backend arbiter
+    // owns settlement.
+    const needsOnChain = hasOnChainEscrow && !mockMode && !backendArbiter;
 
     let releaseTxHash: string | undefined;
     let refundTxHash: string | undefined;
