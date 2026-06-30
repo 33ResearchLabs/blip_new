@@ -286,6 +286,31 @@ app.prepare().then(async () => {
     console.warn('> Escrow reconciler not available:', reconcilerErr.message);
   }
 
+  // Start dispute-reconciler — completes DB finalization for disputes that
+  // already settled on-chain (Released/Refunded) but whose finalize never
+  // committed (blockchain-success + DB-failure window). This is the recovery
+  // safety net that MUST run before the backend arbiter is enabled. Gated by
+  // DISPUTE_RECONCILER_ENABLED (default off) so it stays inert until turned on.
+  if ((process.env.DISPUTE_RECONCILER_ENABLED || '').toLowerCase() === 'true') {
+    try {
+      const { spawn } = require('child_process');
+      const path = require('path');
+      const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+      const disputeReconcilerScript = path.join(__dirname, 'src/workers/disputeReconciler.ts');
+      const disputeReconcilerWorker = spawn(npxBin, ['tsx', disputeReconcilerScript], {
+        stdio: 'inherit',
+        env: { ...process.env },
+        cwd: __dirname,
+      });
+      disputeReconcilerWorker.on('exit', (code) => {
+        if (code !== 0) console.error(`> Dispute reconciler worker exited with code ${code}`);
+      });
+      console.log('> Dispute reconciler started (pid:', disputeReconcilerWorker.pid + ')');
+    } catch (disputeReconcilerErr) {
+      console.warn('> Dispute reconciler not available:', disputeReconcilerErr.message);
+    }
+  }
+
   // Start anomaly-sweeper — observability-only background process that scans
   // for silent business-invariant violations (stuck orders, balance drift,
   // undelivered chats, escrow mismatches) and writes them to error_logs.
