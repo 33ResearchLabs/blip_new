@@ -4,7 +4,7 @@ import { useMerchantStore } from "@/stores/merchantStore";
 import { useRealtimeOrders } from "@/hooks/useRealtimeOrders";
 import type { Order, Notification } from "@/types/merchant";
 import { stageMessage } from "@/lib/notifications/notificationCopy";
-import { isDuplicateRealtimeEvent } from "@/lib/notifications/realtimeDedup";
+import { isDuplicateChatToast } from "@/lib/notifications/realtimeDedup";
 
 interface UseMerchantRealtimeEventsParams {
   debouncedFetchOrders: () => void;
@@ -219,7 +219,7 @@ export function useMerchantRealtimeEvents({
       // open-window path in market/page + this private-channel path) by message
       // id, so one message never produces two toasts. Data refresh above always
       // runs; only the alert is gated.
-      if (isDuplicateRealtimeEvent('chat-toast-mrc', data.messageId)) return;
+      if (isDuplicateChatToast(data.messageId)) return;
 
       // Light-weight notification so the merchant gets the same alert UX as
       // for status events. Falls back to a generic label if we can't find

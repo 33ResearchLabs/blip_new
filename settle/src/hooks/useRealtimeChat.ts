@@ -1305,10 +1305,18 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
   // gap via /api/orders/:id/messages?after_seq=<lastSeq>. The dedup-by-id
   // path in handleNewMessage prevents double-renders if a message arrived
   // both via Pusher and via the catch-up fetch.
+  const reconnectPrevConnectedRef = useRef(false);
   useEffect(() => {
     if (!pusher) return;
     const isPusherConnected = pusher.isConnected;
+    const wasConnected = reconnectPrevConnectedRef.current;
+    reconnectPrevConnectedRef.current = isPusherConnected;
     if (!isPusherConnected) return;
+    // Only run on an actual reconnect transition (false -> true). Previously this
+    // re-fired on every render that flipped the effect (actorType / callback
+    // identity changes) while already connected, issuing a redundant after_seq
+    // fetch per subscribed order each time (429 pressure on the message route).
+    if (wasConnected) return;
     // Only catch-up if we have at least one subscribed order with a known seq.
     if (lastSeqRef.current.size === 0) return;
 

@@ -60,7 +60,7 @@ import { useMerchantWelcome } from "@/hooks/useMerchantWelcome";
 import { OnboardingProvider } from "@/contexts/OnboardingContext";
 import { OnboardingTour } from "@/components/merchant/OnboardingTour";
 import { prefetchOrderMessages } from "@/hooks/useRealtimeChat";
-import { isDuplicateRealtimeEvent } from "@/lib/notifications/realtimeDedup";
+import { isDuplicateChatToast } from "@/lib/notifications/realtimeDedup";
 
 export default function MerchantDashboard() {
   const { playSound } = useSounds();
@@ -650,7 +650,7 @@ export default function MerchantDashboard() {
         // Dedup the alert across the two merchant chat transports (this WS path
         // + the private-channel path in useMerchantRealtimeEvents) by message id
         // so one message never produces two toasts / two beeps.
-        if (isDuplicateRealtimeEvent("chat-toast-mrc", message.id)) return;
+        if (isDuplicateChatToast(message.id)) return;
         playSound("message");
         const senderName =
           useMerchantStore.getState().orders.find((o) => o.id === chatId)?.user || "User";
