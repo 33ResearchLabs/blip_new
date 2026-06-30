@@ -45,6 +45,10 @@ export function useOrderFetching({
   // instead of the generic "Merchant" counterparty fallback (mapDbOrderToUI).
   const merchantName = useMerchantStore((s) => s.merchantInfo?.display_name || s.merchantInfo?.username || null);
   const setIsLoading = useMerchantStore((s) => s.setIsLoading);
+  // Marks "the orders list has settled at least once". Paired with every
+  // setIsLoading(false) below so list views can show their own spinner until
+  // then (no premature "No orders" flash) without ever getting stuck.
+  const setOrdersLoaded = useMerchantStore((s) => s.setOrdersLoaded);
 
   // ─── Local state ───
   const [activeOffers, setActiveOffers] = useState<
@@ -97,6 +101,7 @@ export function useOrderFetching({
 
     if (!merchantId) {
       setIsLoading(false); // Prevent infinite loading spinner
+      setOrdersLoaded(true);
       return;
     }
 
@@ -108,6 +113,7 @@ export function useOrderFetching({
         merchantId,
       );
       setIsLoading(false);
+      setOrdersLoaded(true);
       return;
     }
 
@@ -193,6 +199,7 @@ export function useOrderFetching({
     } finally {
       if (!controller.signal.aborted) {
         setIsLoading(false);
+        setOrdersLoaded(true);
       }
     }
   }, [merchantId, merchantName]);
@@ -604,6 +611,10 @@ export function useOrderFetching({
     if (isPusherConnected) {
       // Pusher handles order updates — only poll mempool (when visible) + periodic balance
       const tick = () => {
+        // Skip background ticks on a hidden tab — the visibility handler below
+        // refetches on return, so there is no staleness gap (saves battery/network
+        // and avoids backgrounded tabs hammering the rate limiter).
+        if (typeof document !== "undefined" && document.hidden) return;
         tickCount++;
         if (isMempoolVisibleRef.current) fetchMempoolOrders();
         lastSyncRef.current = Date.now();
@@ -629,6 +640,8 @@ export function useOrderFetching({
     } else {
       // No Pusher — poll everything at 5s
       const tick = () => {
+        // Skip background ticks on a hidden tab (visibility handler refetches on return).
+        if (typeof document !== "undefined" && document.hidden) return;
         tickCount++;
         debouncedFetchOrders();
         if (isMempoolVisibleRef.current) fetchMempoolOrders();

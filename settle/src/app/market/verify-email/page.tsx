@@ -15,7 +15,9 @@ const ALLOWED_NEXT = new Set(["/market/login", "/waitlist/merchant-login"]);
 
 function safeNext(raw: string | null): string {
   if (raw && ALLOWED_NEXT.has(raw)) return raw;
-  return "/waitlist/merchant-login";
+  // These pages live under the merchant (market) app, so a verifying merchant
+  // must land back on /market/login — not the waitlist-era login shell.
+  return "/market/login";
 }
 
 const AUTO_REDIRECT_MS = 2000;

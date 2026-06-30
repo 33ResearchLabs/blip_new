@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { usePusherOptional } from '@/context/PusherContext';
+import { useRealtimeResync } from '@/hooks/useRealtimeResync';
 import { getOrderChannel } from '@/lib/pusher/channels';
 import { CHAT_EVENTS } from '@/lib/pusher/events';
 
@@ -113,6 +114,11 @@ export function useChatStatus(orderId: string | undefined): ChatStatusResult {
       channel.unbind(CHAT_EVENTS.STATUS_UPDATE, handleStatusUpdate);
     };
   }, [pusher, orderId]);
+
+  // Self-heal: a transient blip (401/429/network) during fetch leaves chat stuck
+  // "Unable to determine chat status" with no recovery but a remount. Re-fetch
+  // when the connection recovers / tab becomes visible / network returns.
+  useRealtimeResync(fetchStatus, !!orderId);
 
   const chatState = deriveChatState(chatEnabled, chatReason, bothPartiesJoined);
 
