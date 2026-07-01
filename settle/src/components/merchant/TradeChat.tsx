@@ -1372,6 +1372,7 @@ export function TradeChat({
                     <input
                       ref={inputRef}
                       data-testid="chat-input"
+                      aria-label="Message"
                       type="text"
                       maxLength={1000}
                       value={messageText}
@@ -1399,6 +1400,7 @@ export function TradeChat({
                   {/* Send — separate circular button; shrink-0 keeps it aligned */}
                   <motion.button
                     data-testid="chat-send"
+                    aria-label="Send message"
                     whileTap={{ scale: 0.95 }}
                     onClick={handleSend}
                     disabled={!messageText.trim() && !pendingImage}

@@ -702,6 +702,7 @@ export function DirectChatView({
               if (pendingImage) { handleImageConfirm(); } else { handleSend(); }
               setShowEmojiPicker(false);
             }}
+            aria-label="Send message"
             disabled={!inputText.trim() && !pendingImage}
             className={`w-7 h-7 rounded-lg border transition-colors disabled:opacity-20 flex items-center justify-center ${
               pendingImage

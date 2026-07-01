@@ -238,6 +238,9 @@ export function TransactionHistoryModal({
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Transaction history"
           className="relative w-full max-w-lg bg-card-solid rounded-2xl border border-border-subtle shadow-2xl max-h-[90vh] flex flex-col"
         >
           {/* Header */}
@@ -257,6 +260,7 @@ export function TransactionHistoryModal({
               </button>
               <button
                 onClick={onClose}
+                aria-label="Close"
                 className="p-2 hover:bg-foreground/[0.06] rounded-lg transition-colors"
               >
                 <X className="w-4 h-4 text-text-tertiary" />

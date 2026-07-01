@@ -189,6 +189,9 @@ export function TradeFormModal({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 8 }}
             transition={{ type: "spring", damping: 28, stiffness: 340, mass: 0.8 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Open trade"
             className="fixed z-50 inset-x-4 bottom-4 md:inset-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[400px]"
             style={{ maxHeight: "90dvh", overflowY: "auto" }}
           >

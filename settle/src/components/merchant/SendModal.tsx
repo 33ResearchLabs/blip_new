@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { useDesktopAutoFocus } from "@/hooks/useDesktopAutoFocus";
 import { motion } from "framer-motion";
 import {
   X,
@@ -107,6 +108,8 @@ export function SendModal({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txSig, setTxSig] = useState<string | null>(null);
+  // Desktop-only autofocus on the recipient field (no keyboard-pop on touch).
+  const recipientRef = useDesktopAutoFocus<HTMLInputElement>(isOpen);
 
   useEffect(() => {
     if (isOpen) {
@@ -263,6 +266,9 @@ export function SendModal({
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Send funds"
         className="w-full md:max-w-sm bg-background border-t md:border border-foreground/[0.08] md:rounded-2xl rounded-t-2xl p-5 space-y-3 max-h-[85vh] overflow-y-auto pb-28 md:pb-5"
       >
         {txSig ? (
@@ -394,6 +400,7 @@ export function SendModal({
                 Recipient
               </span>
               <input
+                ref={recipientRef}
                 type="text"
                 value={recipient}
                 onChange={(e) => setRecipient(e.target.value)}

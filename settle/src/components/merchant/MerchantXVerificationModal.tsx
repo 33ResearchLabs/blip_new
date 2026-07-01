@@ -124,6 +124,9 @@ export function MerchantXVerificationModal({
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.95, opacity: 0, y: 10 }}
           transition={{ type: "spring", damping: 25, stiffness: 300 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Verify on X"
           className="relative w-full max-w-md bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden"
         >
           {/* Header */}
@@ -140,6 +143,7 @@ export function MerchantXVerificationModal({
               </div>
               <button
                 onClick={onClose}
+                aria-label="Close"
                 className="p-2 hover:bg-card rounded-xl transition-colors"
               >
                 <X className="w-4 h-4 text-white/40" />

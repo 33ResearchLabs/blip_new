@@ -29,6 +29,9 @@ export function WalletPromptModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Wallet required"
             className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md bg-card-solid rounded-2xl p-6 border border-white/[0.08] shadow-2xl"
           >
             <div className="text-center">

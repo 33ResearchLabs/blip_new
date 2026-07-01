@@ -149,6 +149,18 @@ function TxnRow({ order, merchantId, onSelectOrder, showBorder }: {
   return (
     <div
       onClick={() => onSelectOrder?.(order)}
+      role={onSelectOrder ? "button" : undefined}
+      tabIndex={onSelectOrder ? 0 : undefined}
+      onKeyDown={
+        onSelectOrder
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectOrder(order);
+              }
+            }
+          : undefined
+      }
       style={{
         display: "flex", alignItems: "center", gap: 12, padding: "11px 12px",
         cursor: onSelectOrder ? "pointer" : "default",
@@ -200,6 +212,18 @@ function CancelledRow({ order, onSelectOrder, showBorder }: {
   return (
     <div
       onClick={() => onSelectOrder?.(order)}
+      role={onSelectOrder ? "button" : undefined}
+      tabIndex={onSelectOrder ? 0 : undefined}
+      onKeyDown={
+        onSelectOrder
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectOrder(order);
+              }
+            }
+          : undefined
+      }
       style={{
         display: "flex", alignItems: "center", gap: 12, padding: "11px 12px",
         cursor: onSelectOrder ? "pointer" : "default",

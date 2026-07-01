@@ -21,6 +21,7 @@
  *     existing /api/rpc proxy so the Helius key stays server-side.
  */
 import { useEffect, useMemo, useState } from "react";
+import { useDesktopAutoFocus } from "@/hooks/useDesktopAutoFocus";
 import { motion } from "framer-motion";
 import { X, ArrowDownUp, Loader2, AlertTriangle, ExternalLink, Check } from "lucide-react";
 import {
@@ -129,6 +130,8 @@ export function SwapModal({
     return 0;
   };
   const [amountStr, setAmountStr] = useState("");
+  // Desktop-only autofocus on the amount field (no keyboard-pop on touch).
+  const amountRef = useDesktopAutoFocus<HTMLInputElement>(isOpen);
   const [quote, setQuote] = useState<JupQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -345,6 +348,9 @@ export function SwapModal({
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Swap tokens"
         className="w-full md:max-w-sm bg-background border-t md:border border-foreground/[0.08] md:rounded-2xl rounded-t-2xl p-5 space-y-3 max-h-[85vh] overflow-y-auto pb-28 md:pb-5"
       >
         {/* Success state — pop the modal into a single checkmark panel
@@ -403,6 +409,7 @@ export function SwapModal({
           </div>
           <div className="flex items-center gap-2">
             <input
+              ref={amountRef}
               type="number"
               inputMode="decimal"
               value={amountStr}

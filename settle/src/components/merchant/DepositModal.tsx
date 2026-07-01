@@ -94,6 +94,9 @@ export function DepositModal({
         initial={{ y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Deposit funds"
         className="w-full md:max-w-sm bg-background border-t md:border border-foreground/[0.08] md:rounded-2xl rounded-t-2xl p-5 space-y-4 max-h-[85vh] overflow-y-auto pb-28 md:pb-5"
       >
         <div className="flex items-center justify-between">

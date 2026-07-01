@@ -377,6 +377,9 @@ export function UnlockWalletModal({
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Unlock wallet"
         className="w-full max-w-md bg-background border border-foreground/[0.08] rounded-3xl p-6 sm:p-7 space-y-5 flex flex-col shadow-2xl"
         style={{
           minHeight: "min(660px, 88vh)",

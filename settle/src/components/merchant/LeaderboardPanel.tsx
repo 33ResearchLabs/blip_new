@@ -145,6 +145,16 @@ export const LeaderboardPanel = memo(function LeaderboardPanel({
       <div
         className="px-3 py-2 border-b border-section-divider cursor-pointer select-none hover:bg-foreground/[0.02] transition-colors"
         onClick={() => handleCollapse(!isCollapsed)}
+        role="button"
+        tabIndex={0}
+        aria-expanded={!isCollapsed}
+        aria-label="Toggle leaderboard"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleCollapse(!isCollapsed);
+          }
+        }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
