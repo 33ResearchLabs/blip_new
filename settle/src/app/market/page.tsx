@@ -1386,6 +1386,14 @@ export default function MerchantDashboard() {
               fetchActiveOffers(),
               solanaWallet?.refreshBalances?.() ?? Promise.resolve(),
             ]);
+            // The underlying fetches swallow their own errors, so read the
+            // shared fetch-error flag to tell the user a pull-to-refresh didn't
+            // actually succeed (the list also shows an inline Error + Retry).
+            if (useMerchantStore.getState().ordersError) {
+              toast.showWarning(
+                "Couldn't refresh orders. Check your connection and try again.",
+              );
+            }
           }}
         />
 

@@ -199,6 +199,7 @@ const OrderList = memo(function OrderList({
   onAcceptOrder,
   onCancelOrder,
   acceptingOrderId,
+  fetchOrders,
 }: {
   filteredOrders: any[];
   merchantInfo: any;
@@ -207,6 +208,7 @@ const OrderList = memo(function OrderList({
   onAcceptOrder: (order: any) => void;
   onCancelOrder?: (order: any) => void;
   acceptingOrderId?: string | null;
+  fetchOrders?: () => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const corridorPrices = useCorridorPrices();
@@ -228,6 +230,19 @@ const OrderList = memo(function OrderList({
   // loaded dashboard shows a spinner here (not a misleading "No pending orders")
   // until orders arrive.
   const ordersLoaded = useMerchantStore((s) => s.ordersLoaded);
+  // Last orders-fetch failure (null when healthy). Only used to swap the empty
+  // state for an Error + Retry state — never hides an already-populated list.
+  const ordersError = useMerchantStore((s) => s.ordersError);
+  const [retrying, setRetrying] = useState(false);
+  const handleRetry = async () => {
+    if (retrying || !fetchOrders) return;
+    setRetrying(true);
+    try {
+      await fetchOrders();
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const virtualizer = useVirtualizer({
     count: filteredOrders.length,
@@ -240,7 +255,36 @@ const OrderList = memo(function OrderList({
     return (
       <div className="flex-1 overflow-y-auto p-1.5">
         <div className="flex flex-col items-center justify-center h-full gap-3">
-          {!ordersLoaded ? (
+          {ordersError ? (
+            <>
+              <div className="w-10 h-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.02] flex items-center justify-center">
+                <AlertCircle className="w-5 h-5 text-foreground/30" />
+              </div>
+              <div className="text-center">
+                <p className="text-[11px] font-medium text-foreground/40 mb-0.5">
+                  Couldn&apos;t load orders
+                </p>
+                <p className="text-[9px] text-foreground/20 font-mono mb-2 max-w-[200px] mx-auto">
+                  {ordersError}
+                </p>
+                {fetchOrders && (
+                  <button
+                    type="button"
+                    onClick={handleRetry}
+                    disabled={retrying}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-semibold text-foreground/60 bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.08] transition-all disabled:opacity-50"
+                  >
+                    {retrying ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <RotateCcw className="w-3 h-3" />
+                    )}
+                    {retrying ? "Retrying…" : "Retry"}
+                  </button>
+                )}
+              </div>
+            </>
+          ) : !ordersLoaded ? (
             <Loader2 className="w-5 h-5 text-foreground/20 animate-spin" />
           ) : (
             <>
@@ -2102,6 +2146,7 @@ export const PendingOrdersPanel = memo(function PendingOrdersPanel({
               onAcceptOrder={onAcceptOrder}
               onCancelOrder={onCancelOrder}
               acceptingOrderId={acceptingOrderId}
+              fetchOrders={fetchOrders}
             />
           )}
 

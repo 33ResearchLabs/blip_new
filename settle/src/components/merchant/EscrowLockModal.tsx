@@ -89,6 +89,9 @@ export function EscrowLockModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Lock escrow"
             className="fixed z-50 w-full max-w-xl inset-x-0 bottom-0 mx-auto md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           >
             <div className={`${S.screen} rounded-t-2xl md:rounded-2xl border border-b-0 md:border-b border-border-subtle shadow-2xl overflow-hidden pb-safe md:pb-0 max-h-[90dvh] overflow-y-auto`}>
@@ -111,6 +114,7 @@ export function EscrowLockModal({
                 {!isLockingEscrow && (
                   <button
                     onClick={onClose}
+                    aria-label="Close"
                     className={`p-2 rounded-lg transition-colors ${S.hover}`}
                   >
                     <X className="w-4 h-4 text-text-tertiary" />
@@ -214,9 +218,16 @@ export function EscrowLockModal({
                     loading={recv.loading}
                     surfaces={S}
                     error={
-                      !recv.loading && recv.methods.length === 0
-                        ? "Add a payment method to lock escrow."
-                        : null
+                      recv.error && recv.methods.length === 0
+                        ? recv.error
+                        : !recv.loading && recv.methods.length === 0
+                          ? "Add a payment method to lock escrow."
+                          : null
+                    }
+                    onRetry={
+                      recv.error && recv.methods.length === 0
+                        ? recv.refetch
+                        : undefined
                     }
                   />
                 )}

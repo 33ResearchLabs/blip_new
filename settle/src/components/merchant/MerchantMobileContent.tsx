@@ -302,6 +302,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
               onCancelOrder={handleCancelOrder}
               cancellingOrderId={cancellingOrderId}
               onSelectOrder={setSelectedOrderPopup}
+              onRetry={onRefresh}
             />
           )}
           {mobileView === "escrow" && (
@@ -376,6 +377,7 @@ export const MerchantMobileContent = React.memo(function MerchantMobileContent(p
         <motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => setFabSheetSide("buy")}
+          aria-label="Open trade"
           className="lg:hidden fixed right-4 bottom-[88px] z-40 w-14 h-14 rounded-full bg-[#f5f5f7] shadow-lg shadow-black/20 flex items-center justify-center"
         >
           <Plus className="w-6 h-6 text-background" />
