@@ -869,6 +869,9 @@ export interface MobileOrdersViewProps {
   // Open the order detail popup (OrderQuickView). Tapping a card's header
   // opens it — mirrors the desktop New Orders panel behaviour.
   onSelectOrder?: (order: Order) => void;
+  // Refetch orders — used by the empty-state Retry button when the last fetch
+  // failed (the store's ordersError is set). Fire-and-forget or awaitable.
+  onRetry?: () => void | Promise<void>;
 }
 
 export function MobileOrdersView({
@@ -880,6 +883,7 @@ export function MobileOrdersView({
   onCancelOrder,
   cancellingOrderId,
   onSelectOrder,
+  onRetry,
 }: MobileOrdersViewProps) {
   // Periodic clock tick (30s) so the expired-order filter re-evaluates while the
   // page stays open — orders that lapse client-side don't mutate the store, so
@@ -917,6 +921,20 @@ export function MobileOrdersView({
   // surface accepted / payment_sent / completed / cancelled rows the way
   // desktop does.
   const allMerchantOrders = useMerchantStore((s) => s.orders) as Order[];
+  // Last orders-fetch failure — swaps the "Waiting for orders…" empty copy for
+  // an explicit Error + Retry state, but only when there's genuinely nothing to
+  // show (never masks an already-loaded list).
+  const ordersError = useMerchantStore((s) => s.ordersError);
+  const [retrying, setRetrying] = useState(false);
+  const handleRetry = async () => {
+    if (retrying || !onRetry) return;
+    setRetrying(true);
+    try {
+      await onRetry();
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   // Exact copy of the desktop pending bar's `isMyOwnOrder` check
   // (PendingOrdersPanel.tsx:479-483) so mobile rows label themselves the
@@ -1347,6 +1365,73 @@ export function MobileOrdersView({
           //      specific message, NO "Clear filters" (nothing to clear)
           const hasActiveFilters =
             pendingFilter !== "all" || searchQuery.trim().length > 0;
+
+          // A failed orders fetch that left nothing to show → surface an
+          // explicit error + Retry instead of the misleading "Waiting for
+          // orders…". Gated on "genuinely empty" (no filters, store empty) so a
+          // filter-hidden list or a background-poll blip never triggers it.
+          const showFetchError =
+            !!ordersError &&
+            !hasActiveFilters &&
+            pendingOrders.length === 0 &&
+            allMerchantOrders.length === 0;
+          if (showFetchError) {
+            return (
+              <div style={{ textAlign: "center", paddingTop: 120 }}>
+                <div
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: 22,
+                    background: "rgba(255,255,255,0.055)",
+                    border: "1px solid rgba(255,255,255,0.09)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 16px",
+                    color: "#86868b",
+                  }}
+                >
+                  <Activity className="w-7 h-7" />
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#f5f5f7" }}>
+                  Couldn&apos;t load orders
+                </div>
+                <div
+                  style={{
+                    color: "#86868b",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    marginTop: 5,
+                    padding: "0 24px",
+                  }}
+                >
+                  {ordersError}
+                </div>
+                {onRetry && (
+                  <button
+                    onClick={handleRetry}
+                    disabled={retrying}
+                    style={{
+                      marginTop: 14,
+                      padding: "8px 20px",
+                      borderRadius: 999,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(255,255,255,0.055)",
+                      color: "#f5f5f7",
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      cursor: retrying ? "default" : "pointer",
+                      opacity: retrying ? 0.5 : 1,
+                    }}
+                  >
+                    {retrying ? "Retrying…" : "Retry"}
+                  </button>
+                )}
+              </div>
+            );
+          }
+
           let message: string;
           if (pendingOrders.length === 0) {
             message = "Waiting for orders...";

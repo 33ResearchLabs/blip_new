@@ -2643,6 +2643,12 @@ function ActiveOrderBody({
           }}
           loading={recv.loading}
           surfaces={SURFACES.merchant}
+          error={
+            recv.error && recv.methods.length === 0 ? recv.error : null
+          }
+          onRetry={
+            recv.error && recv.methods.length === 0 ? recv.refetch : undefined
+          }
           title="Receive Payment In"
           subtitle="Choose account where you want to receive payment"
           addLabel="Add Another Account / UPI"
@@ -2931,6 +2937,14 @@ function ActiveOrderBody({
               }}
               loading={recv.loading}
               surfaces={SURFACES.merchant}
+              error={
+                recv.error && recv.methods.length === 0 ? recv.error : null
+              }
+              onRetry={
+                recv.error && recv.methods.length === 0
+                  ? recv.refetch
+                  : undefined
+              }
             />
           )}
 

@@ -28,6 +28,9 @@ interface Props {
   surfaces: SurfaceTokens;
   /** Inline validation error, e.g. "Please select a receiving account…". */
   error?: string | null;
+  /** When set, renders a "Retry" affordance next to the error — used when the
+   *  error is a load failure (vs. a validation message) that a refetch can fix. */
+  onRetry?: () => void;
   className?: string;
   /** Header/CTA copy overrides (default to the Lock Escrow wording). The
    *  merchant-mobile full-screen Lock Escrow uses "Receive Payment In" etc. */
@@ -93,6 +96,7 @@ export function ReceivingAccountPicker({
   loading,
   surfaces,
   error,
+  onRetry,
   className = "",
   title = "Select Receiving Account",
   subtitle = "Buyer will pay to the account you select below.",
@@ -181,7 +185,20 @@ export function ReceivingAccountPicker({
         </div>
       )}
 
-      {error && <p className="text-[11px] text-error mt-2">{error}</p>}
+      {error && (
+        <div className="flex items-center gap-2 mt-2">
+          <p className="text-[11px] text-error">{error}</p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="text-[11px] font-semibold text-accent-text underline underline-offset-2"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
 
       <button
         type="button"

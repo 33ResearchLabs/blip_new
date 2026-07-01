@@ -49,6 +49,12 @@ export function useOrderFetching({
   // setIsLoading(false) below so list views can show their own spinner until
   // then (no premature "No orders" flash) without ever getting stuck.
   const setOrdersLoaded = useMerchantStore((s) => s.setOrdersLoaded);
+  // Records the last orders-fetch failure so list views can render an explicit
+  // Error + Retry state instead of a misleading "No orders" empty state.
+  // Cleared on the next successful fetch. Only surfaces in the UI when the list
+  // is otherwise empty, so a transient background-poll failure never wipes an
+  // already-populated list.
+  const setOrdersError = useMerchantStore((s) => s.setOrdersError);
 
   // ─── Local state ───
   const [activeOffers, setActiveOffers] = useState<
@@ -134,6 +140,9 @@ export function useOrderFetching({
           res.statusText,
           errorBody,
         );
+        setOrdersError(
+          "Couldn't load your orders. Check your connection and retry.",
+        );
         return;
       }
       const data = await res.json();
@@ -143,6 +152,8 @@ export function useOrderFetching({
         setHasMoreOrders(data.pagination.has_more);
       }
       if (data.success && data.data) {
+        // Clear any prior fetch error now that we have a good response.
+        setOrdersError(null);
         const mappedOrders = data.data.map((o: DbOrder) =>
           mapDbOrderToUI(o, merchantId, merchantName),
         );
@@ -196,6 +207,9 @@ export function useOrderFetching({
     } catch (error) {
       if ((error as Error).name === "AbortError") return;
       console.error("[Merchant] Error fetching orders:", error);
+      setOrdersError(
+        "Couldn't load your orders. Check your connection and retry.",
+      );
     } finally {
       if (!controller.signal.aborted) {
         setIsLoading(false);
