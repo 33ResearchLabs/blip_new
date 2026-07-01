@@ -135,7 +135,7 @@ export function SellPaymentTracker({
       }
     : {
         title: "Merchant accepted your order!",
-        sub: "Your order has been accepted by the merchant. Please wait for the buyer to complete the payment.",
+        sub: " Please wait for the buyer to complete the payment.",
         icon: ShieldCheck,
         bg: "bg-border-subtle",
         fg: "text-text-secondary",

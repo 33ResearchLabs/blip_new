@@ -214,6 +214,13 @@ export const TradeCreationScreen = ({
   const prioActiveBorder = isLight ? "rgba(20,21,26,0.85)" : T.activeTileBorder;
   const prioActiveText = isLight ? "#ffffff" : T.activeTileText;
   const prioActiveSubText = isLight ? "rgba(255,255,255,0.65)" : T.activeTileSubText;
+  // Selected quick-amount chip: monochrome (black / near-black) instead of the
+  // orange accent. Light uses pure black; dark uses a #1a1a1a surface with a
+  // light border so it stays visible against the near-black bg and distinct
+  // from the faint unselected chips. Both pair with white text (≥17:1 contrast).
+  const chipSelectedBg = isLight ? "#000000" : "#1a1a1a";
+  const chipSelectedText = "#ffffff";
+  const chipSelectedBorder = isLight ? "#000000" : "rgba(255,255,255,0.55)";
   const hasAmount = !!amount && parseFloat(amount) > 0;
   const isBuy = tradeType === "buy";
   // BUY needs ≥1 pay rail ticked; SELL needs a receive account chosen.
@@ -654,7 +661,9 @@ export const TradeCreationScreen = ({
 
         {/* Quick-amount chips with spring snap */}
         <div className="flex items-center" style={{ gap: 8, marginTop: 18 }}>
-          {QUICK_AMOUNTS.map((v) => (
+          {QUICK_AMOUNTS.map((v) => {
+            const selected = hasAmount && parseFloat(amount) === parseFloat(v);
+            return (
             <motion.button
               key={v}
               whileTap={{ scale: 0.88 }}
@@ -664,8 +673,8 @@ export const TradeCreationScreen = ({
               style={{
                 padding: "6px 12px",
                 borderRadius: 999,
-                background: T.surface1,
-                border: `1px solid ${T.border1}`,
+                background: selected ? chipSelectedBg : T.surface1,
+                border: `1px solid ${selected ? chipSelectedBorder : T.border1}`,
                 backdropFilter: "blur(10px)",
                 WebkitBackdropFilter: "blur(10px)",
               }}
@@ -675,7 +684,7 @@ export const TradeCreationScreen = ({
                   fontSize: 11,
                   fontWeight: 800,
                   letterSpacing: "-0.005em",
-                  color: T.md,
+                  color: selected ? chipSelectedText : T.md,
                   fontFamily:
                     "ui-monospace, SFMono-Regular, Menlo, monospace",
                 }}
@@ -685,10 +694,15 @@ export const TradeCreationScreen = ({
                   : v}
               </span>
             </motion.button>
-          ))}
+            );
+          })}
           {solanaWallet.connected &&
             solanaWallet.usdtBalance !== null &&
-            solanaWallet.usdtBalance > 0 && (
+            solanaWallet.usdtBalance > 0 && (() => {
+              const maxSelected =
+                hasAmount &&
+                parseFloat(amount) === solanaWallet.usdtBalance;
+              return (
               <motion.button
                 whileTap={{ scale: 0.88 }}
                 onClick={() =>
@@ -702,11 +716,10 @@ export const TradeCreationScreen = ({
                 style={{
                   padding: "6px 12px",
                   borderRadius: 999,
-                  background: T.activeTileBg,
-                  border: `1px solid ${T.activeTileBorder}`,
-                  boxShadow: isLight
-                    ? "0 6px 14px -6px rgba(15,23,42,0.25), inset 0 1px 0 rgba(255,255,255,0.10)"
-                    : "0 6px 14px -6px rgba(255,255,255,0.30), inset 0 1px 0 rgba(255,255,255,0.85)",
+                  background: maxSelected ? chipSelectedBg : T.surface1,
+                  border: `1px solid ${maxSelected ? chipSelectedBorder : T.border1}`,
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)",
                 }}
               >
                 <span
@@ -714,13 +727,14 @@ export const TradeCreationScreen = ({
                     fontSize: 11,
                     fontWeight: 800,
                     letterSpacing: "0.10em",
-                    color: T.activeTileText,
+                    color: maxSelected ? chipSelectedText : T.md,
                   }}
                 >
                   MAX
                 </span>
               </motion.button>
-            )}
+              );
+            })()}
         </div>
 
         {/* Buy/Sell — active = white tile */}

@@ -209,7 +209,7 @@ export const MatchingScreen = ({
         searchHint={{ lines: searchLines }}
         // Buyer hasn't escrowed anything yet — no escrow card on the buy flow.
         escrow={isBuy ? null : {
-          sub: `Your ${cryptoStr} USDT is locked securely in escrow. You'll be notified once a merchant is matched.`,
+          sub: `Your ${cryptoStr} USDT is locked securely in escrow.`,
           txHref: null,
         }}
         activeStepIndex={1}
