@@ -309,14 +309,14 @@ export function MerchantChatTabs({
                       <img
                         src={cpAvatar}
                         alt={cpUsername}
-                        style={{ width: 46, height: 46, borderRadius: 999, objectFit: "cover", border: "1px solid var(--border)" }}
+                        style={{ width: 40, height: 40, borderRadius: 999, objectFit: "cover", border: "1px solid var(--border)" }}
                       />
                     ) : (
                       <div style={{
-                        width: 46, height: 46, borderRadius: 999,
+                        width: 40, height: 40, borderRadius: 999,
                         background: "linear-gradient(150deg,#ff8a3d,#ff5d73)",
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        color: "#fff", fontWeight: 800, fontSize: 16,
+                        color: "#fff", fontWeight: 800, fontSize: 14,
                       }}>
                         {initials}
                       </div>
