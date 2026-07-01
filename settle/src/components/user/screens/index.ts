@@ -17,6 +17,7 @@ export { RewardsScreen } from './RewardsScreen';
 export { LimitsScreen } from './LimitsScreen';
 export { StakeScreen } from './StakeScreen';
 export { PointsScreen } from './PointsScreen';
+export { ResolvedDisputesScreen } from './ResolvedDisputesScreen';
 export { BottomNav } from './BottomNav';
 export { HomeSparkline, HomeAmbientGlow } from './HomeDecorations';
 export { mapDbStatusToUI, mapDbOrderToUI, FEE_CONFIG } from './helpers';
