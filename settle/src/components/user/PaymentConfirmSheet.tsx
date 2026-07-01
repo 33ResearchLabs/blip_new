@@ -25,8 +25,9 @@ export interface PaymentConfirmSheetProps {
   open: boolean;
   /** e.g. "₹4,925" — restated so the buyer re-reads the figure they sent. */
   amountLabel: string;
-  /** e.g. the account name — where the money should have gone. */
-  destination: string;
+  /** e.g. the account name — where the money should have gone. Optional:
+   *  no longer shown in the confirm copy, kept for backward compatibility. */
+  destination?: string;
   /** The 3 things the buyer must confirm; confirm enables only when all ticked. */
   checklist: string[];
   /** e.g. "Yes, I've sent ₹4,925". */
@@ -41,7 +42,6 @@ export interface PaymentConfirmSheetProps {
 export function PaymentConfirmSheet({
   open,
   amountLabel,
-  destination,
   checklist,
   confirmLabel,
   loading = false,
@@ -93,8 +93,7 @@ export function PaymentConfirmSheet({
               <h2 className="text-[18px] font-bold text-text-primary">Did you send the payment?</h2>
               <p className="text-[14px] text-text-secondary leading-snug mt-1.5">
                 You&apos;re confirming you sent{" "}
-                <span className="font-semibold text-text-primary">{amountLabel}</span> to{" "}
-                <span className="font-semibold text-text-primary">{destination}</span>.
+                <span className="font-semibold text-text-primary">{amountLabel}</span>.
               </p>
 
               {/* Checklist — confirm stays disabled until every box is ticked. */}

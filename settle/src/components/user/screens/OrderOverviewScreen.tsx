@@ -393,7 +393,11 @@ function Row({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(value);
+      // UPI IDs are displayed with the app name appended for context, e.g.
+      // "name@bank (Google Pay)". Copy only the identifier — strip a trailing
+      // parenthetical annotation so the pasted value works in a payment app.
+      const copyText = value.replace(/\s*\([^()]*\)\s*$/, "");
+      await navigator.clipboard.writeText(copyText);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {

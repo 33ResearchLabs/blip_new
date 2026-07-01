@@ -14,7 +14,7 @@
  * /error / surface) — no hardcoded hex, no `text-white`, including buttons.
  */
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
@@ -98,20 +98,22 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
           <motion.div
             initial={{ y: 12, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
+            className={`rounded-2xl p-4 flex items-start gap-3 ${CARD}`}
           >
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
               <ShieldCheck className="w-6 h-6 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-text-primary">Payment verified!</p>
-              <p className="text-[13px] text-text-secondary leading-snug">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[15px] font-semibold text-text-primary">Payment verified!</p>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-border-subtle shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-text-secondary" />
+                  <span className="text-[11px] font-semibold text-text-secondary">COMPLETED</span>
+                </div>
+              </div>
+              <p className="text-[13px] text-text-secondary leading-snug mt-0.5">
                 The payment has been verified and the USDT has been released to the buyer.
               </p>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-border-subtle shrink-0 self-start">
-              <span className="w-1.5 h-1.5 rounded-full bg-text-secondary" />
-              <span className="text-[11px] font-semibold text-text-secondary">COMPLETED</span>
             </div>
           </motion.div>
 
@@ -122,26 +124,29 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
             transition={{ delay: 0.03 }}
             className={`rounded-2xl p-4 ${CARD}`}
           >
-            <div className="flex items-start">
+            <div className="flex items-start pt-1">
               {routeNodes.map((n, i) => {
                 const isLast = i === routeNodes.length - 1;
                 return (
-                  <div key={n.label} className={`flex flex-col items-center ${isLast ? "" : "flex-1"}`}>
-                    <div className="flex items-center w-full">
-                      <div className="relative shrink-0 mx-auto">
+                  <Fragment key={n.label}>
+                    <div className="flex flex-col items-center shrink-0">
+                      <div className="relative">
                         <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-border-subtle">
                           <n.icon className="w-5 h-5 text-text-secondary" />
                         </div>
                         <CheckCircle2 className="absolute -top-1 -right-1 w-4 h-4 text-text-primary bg-surface-card rounded-full" />
                       </div>
-                      {!isLast && (
-                        <div className="flex-1 mx-1 border-t-2 border-dashed border-border-medium" />
-                      )}
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary mt-1.5">
+                        {n.label}
+                      </span>
                     </div>
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-text-tertiary mt-1.5">
-                      {n.label}
-                    </span>
-                  </div>
+                    {!isLast && (
+                      // Connector sits between two steps; mt matches the icon's
+                      // vertical centre (44px icon → 22px, less the 2px line) so
+                      // the dashes line up with the middle of the step icons.
+                      <div className="flex-1 h-0 border-t-2 border-dashed border-border-medium mt-5.25 mx-2" />
+                    )}
+                  </Fragment>
                 );
               })}
             </div>
@@ -292,7 +297,7 @@ function CompletedTile({
         <span className="w-7 h-7 rounded-full bg-border-subtle flex items-center justify-center">{icon}</span>
       </div>
       <p className="text-[10px] uppercase tracking-wide text-text-tertiary mb-0.5">{label}</p>
-      <p className={`text-[13px] font-semibold leading-tight truncate ${valueClass || "text-text-primary"}`}>{value}</p>
+      <p className={`text-[13px] font-semibold leading-tight wrap-break-word ${valueClass || "text-text-primary"}`}>{value}</p>
       {sub && <p className="text-[10px] text-text-tertiary leading-tight">{sub}</p>}
     </div>
   );

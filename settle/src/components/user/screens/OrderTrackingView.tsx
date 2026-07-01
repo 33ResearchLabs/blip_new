@@ -189,7 +189,7 @@ export function OrderTrackingView({
     ? {
         sub: matched
           ? `Your ${cryptoStr} USDT is locked securely in escrow until the trade completes.`
-          : `Your ${cryptoStr} USDT is locked securely in escrow. You'll be notified once a merchant is matched.`,
+          : `Your ${cryptoStr} USDT is locked securely in escrow.`,
         txHref: null,
       }
     : null;

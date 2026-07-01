@@ -115,7 +115,11 @@ export function OrderCompletedScreen({
               <Check className="w-8 h-8 text-surface-base" strokeWidth={3} />
             </motion.div>
           </div>
-          <p className="text-[24px] font-bold text-text-primary mb-1">{cryptoStr} USDT Released</p>
+          <p className="text-[24px] font-bold text-text-primary mb-1">
+            {cryptoStr} USDT
+            <br />
+            Released
+          </p>
           <p className="text-[14px] text-text-secondary leading-snug px-2">
             The seller has confirmed the payment and the crypto has been released to you.
           </p>

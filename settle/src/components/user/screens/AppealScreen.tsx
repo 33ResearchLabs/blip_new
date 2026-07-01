@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import type { Order } from "./types";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { formatCrypto, formatRate, formatCount } from "@/lib/format";
+import { formatCrypto, formatCount } from "@/lib/format";
 import { getAppealIssuesForStage, getAppealIssue } from "@/lib/appeals/issues";
 
 const CARD = "bg-surface-card border border-border-subtle";
@@ -176,10 +176,9 @@ export function AppealScreen({
         {/* Order overview */}
         <div className={`rounded-2xl p-4 ${CARD}`}>
           <p className="text-[15px] font-semibold text-text-primary mb-3">Order overview</p>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <OverviewCell label="You pay" value={fiatStr} />
             <OverviewCell label="You will receive" value={cryptoStr} />
-            <OverviewCell label="Rate" value={`${sym}${formatRate(order.merchant.rate)}`} />
             <OverviewCell label="Payment method" value={order.merchant.paymentMethod === "cash" ? "Cash" : "Bank Transfer"} />
           </div>
         </div>

@@ -453,9 +453,16 @@ export const OrderDetailScreen = ({
       },
     );
   };
-  // Chat popup: collapse the order-details (receipt) card by default so the
-  // message area gets the full height. Toggled from the chat header.
-  const [showOrderDetails, setShowOrderDetails] = useLocalState(false);
+  // Chat popup: show the order-details (receipt) card expanded the FIRST time
+  // the chat is opened for this order, then remember the user's choice
+  // (per-order, sessionStorage) so collapsing it sticks across refreshes.
+  // Toggled from the chat header.
+  const detailsShownKey = `blip_order_${activeOrder.id}_chat_details`;
+  const [showOrderDetails, setShowOrderDetails] = useLocalState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    const stored = sessionStorage.getItem(detailsShownKey);
+    return stored === null ? true : stored === "1";
+  });
 
   // Pull the order receipt out of the chat stream so the header toggle can
   // render it on demand. Mirrors the inline receipt-message parsing below.
@@ -3615,7 +3622,17 @@ export const OrderDetailScreen = ({
                 </div>
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setShowOrderDetails((v) => !v)}
+                    onClick={() =>
+                      setShowOrderDetails((v) => {
+                        const next = !v;
+                        try {
+                          sessionStorage.setItem(detailsShownKey, next ? "1" : "0");
+                        } catch {
+                          /* storage disabled — in-memory toggle still works */
+                        }
+                        return next;
+                      })
+                    }
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-surface-card text-text-secondary"
                     aria-expanded={showOrderDetails}
                     aria-label={showOrderDetails ? "Hide order details" : "Show order details"}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Wallet,
   Copy,
@@ -329,6 +329,9 @@ export const ProfileScreen = ({
   const faceVerified = faceVerifiedLocal ||
     Boolean((user as { face_verified?: boolean } | null)?.face_verified);
   const [showLiveness, setShowLiveness] = useState(false);
+  // Resolved Disputes accordion — collapsed by default, expands in place to
+  // reveal the dispute history list inside the same card.
+  const [disputesExpanded, setDisputesExpanded] = useState(false);
 
   // Copy the connected Solana wallet address with a brief check-mark confirm.
   const [copiedAddr, setCopiedAddr] = useState(false);
@@ -629,49 +632,81 @@ export const ProfileScreen = ({
           />
         </SettingsGroup>
 
-        {/* Resolved Disputes — rich list kept inline so each card retains
-            its existing layout (orderNumber, won/lost/split badge, amount,
-            counterparty). Only rendered when there's at least one. */}
-        {resolvedDisputes.length > 0 && (
-          <section className="mb-6">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <span className={SECTION_LABEL}>Resolved Disputes</span>
-              <StatusPill label={`${resolvedDisputes.length}`} tone="muted" />
-            </div>
-            <div className="flex flex-col gap-2">
-              {resolvedDisputes.map(dispute => {
-                const badgeClass =
-                  dispute.resolvedInFavorOf === 'user'
-                    ? 'bg-surface-raised text-text-primary border border-border-medium'
-                    : dispute.resolvedInFavorOf === 'merchant'
-                    ? 'bg-surface-active text-text-tertiary border border-border-subtle'
-                    : 'bg-surface-active text-text-tertiary';
-                return (
-                  <div key={dispute.id} className={`rounded-[16px] px-4 py-3 ${CARD}`}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-bold text-text-primary">#{dispute.orderNumber}</span>
-                        <span className={`text-[9px] font-bold tracking-[0.1em] uppercase px-[7px] py-0.5 rounded-full ${badgeClass}`}>
-                          {dispute.resolvedInFavorOf === 'user' ? 'Won' :
-                           dispute.resolvedInFavorOf === 'merchant' ? 'Lost' : 'Split'}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-text-tertiary">
-                        {new Date(dispute.resolvedAt).toLocaleDateString('en-US')}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <p className="text-[12px] text-text-tertiary">vs {dispute.otherPartyName}</p>
-                      <p className="text-[14px] font-bold text-text-primary tracking-[-0.01em]">
-                        ${dispute.cryptoAmount.toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+        {/* ── Disputes ── Resolved-dispute history as a single expandable
+            list item that matches the Trading / Security row style. Collapsed
+            by default; expands in place to reveal the list inside the same
+            card. Badge shows the count only when there's at least one. */}
+        <SettingsGroup label="Disputes" icon={<ShieldCheck className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            icon={<ShieldCheck className="w-[15px] h-[15px]" />}
+            title="Resolved Disputes"
+            subtitle="View your resolved dispute history"
+            expanded={disputesExpanded}
+            onClick={() => setDisputesExpanded(v => !v)}
+            trailing={
+              resolvedDisputes.length > 0 ? (
+                // Monochrome count badge. `bg-white text-black` renders white/black
+                // in dark mode; the .user-scope.user-light CSS flips it to a
+                // near-black pill with white text — no accent/yellow in either theme.
+                <span className="inline-flex items-center justify-center min-w-4.5 h-4.5 px-1.5 rounded-full text-[10px] font-bold tabular-nums bg-white text-black">
+                  {resolvedDisputes.length}
+                </span>
+              ) : undefined
+            }
+          />
+          <AnimatePresence initial={false}>
+            {disputesExpanded && (
+              <motion.div
+                key="resolved-disputes-panel"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.24, ease: "easeInOut" }}
+                className="overflow-hidden"
+              >
+                {resolvedDisputes.length === 0 ? (
+                  <p className="px-4 py-4 text-[12.5px] font-medium text-white/45">
+                    No resolved disputes yet.
+                  </p>
+                ) : (
+                  <ul className="max-h-70 overflow-y-auto scrollbar-hide divide-y divide-white/5">
+                    {resolvedDisputes.map(dispute => {
+                      const won = dispute.resolvedInFavorOf === 'user';
+                      const lost = dispute.resolvedInFavorOf === 'merchant';
+                      return (
+                        <li key={dispute.id} className="px-4 py-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-[13px] font-bold text-white/95 truncate">
+                                #{dispute.orderNumber}
+                              </span>
+                              <StatusPill
+                                label={won ? 'Won' : lost ? 'Lost' : 'Split'}
+                                tone={won ? 'on' : lost ? 'error' : 'muted'}
+                                dot={false}
+                              />
+                            </div>
+                            <span className="text-[11px] text-white/40 shrink-0">
+                              {new Date(dispute.resolvedAt).toLocaleDateString('en-US')}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[12px] text-white/45 truncate">
+                              vs {dispute.otherPartyName}
+                            </span>
+                            <span className="text-[14px] font-bold text-white/95 tracking-[-0.01em] shrink-0">
+                              ${dispute.cryptoAmount.toLocaleString()}
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </SettingsGroup>
 
         {/* ── 4. Security ── */}
         <SettingsGroup label="Security" icon={<Shield className="w-3.5 h-3.5" />}>

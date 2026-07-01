@@ -212,7 +212,7 @@ export const EscrowLockScreen = ({
           banner={successBanner}
           countdown={expMs ? { remainingSec, totalSec } : null}
           escrow={{
-            sub: `Your ${cryptoStr} USDT is locked securely in escrow. You'll be notified once a merchant is matched.`,
+            sub: `Your ${cryptoStr} USDT is locked securely in escrow.`,
             txHref: escrowTxHash ? explorerUrl("tx", escrowTxHash) : null,
           }}
           activeStepIndex={1}

@@ -95,7 +95,19 @@ function derivePaymentRows(order: Order, displayId: string): PaymentRow[] {
     const t = (mpm.type || "").toLowerCase();
     const isUpi = t === "upi" || (typeof mpm.details === "string" && mpm.details.includes("@"));
     rows.push({ label: isUpi ? "UPI Name" : "Account Name", value: mpm.name || "—", copyKey: "pm-name" });
-    rows.push({ label: isUpi ? "UPI ID" : "Account No. / IBAN", value: mpm.details || "—", copyKey: "pm-id", mono: true });
+    {
+      // UPI IDs display the app name for context ("id@bank (Google Pay)"), but
+      // only the identifier should be copied so it pastes cleanly into a
+      // payment app — strip a trailing parenthetical annotation from copyValue.
+      const details = mpm.details || "—";
+      rows.push({
+        label: isUpi ? "UPI ID" : "Account No. / IBAN",
+        value: details,
+        copyValue: isUpi ? details.replace(/\s*\([^()]*\)\s*$/, "") : undefined,
+        copyKey: "pm-id",
+        mono: true,
+      });
+    }
   } else if (lpm) {
     const d = lpm.details || {};
     if (d.bank_name) rows.push({ label: "Bank Name", value: d.bank_name, copyKey: "bank" });
@@ -287,39 +299,25 @@ export function OrderPaymentScreen({
               <p className={`text-[13px] font-medium ${fundsLocked ? "text-text-primary" : "text-text-secondary"}`}>
                 {fundsLocked ? "Escrow is locked by seller" : "Escrow is not locked yet"}
               </p>
-              <div className="flex items-end justify-between gap-2">
-                <p className="text-[12px] text-text-tertiary leading-snug">
-                  {paymentSent
-                    ? "Your funds are safe. Waiting for seller to confirm."
-                    : escrowLocked
-                      ? "Your funds are safe. Pay now to receive USDT."
-                      : "Bank details appear once the merchant locks the funds."}
-                </p>
-                {fundsLocked && (
-                  <span className="shrink-0 inline-flex px-2 py-1 rounded-md text-[11px] font-semibold bg-border-subtle text-text-secondary whitespace-nowrap">
-                    {cryptoStr} USDT Locked
-                  </span>
-                )}
-              </div>
+              <p className="text-[12px] text-text-tertiary leading-snug">
+                {paymentSent
+                  ? "Your funds are safe. Waiting for seller to confirm."
+                  : escrowLocked
+                    ? "Your funds are safe. Pay now to receive USDT."
+                    : "Bank details appear once the merchant locks the funds."}
+              </p>
+              {/* Locked amount badge — sits directly below the subtitle
+                  (previously floated to the right of it). */}
+              {fundsLocked && (
+                <span className="mt-2 inline-flex px-2 py-1 rounded-md text-[11px] font-semibold bg-border-subtle text-text-secondary whitespace-nowrap">
+                  {cryptoStr} USDT Locked
+                </span>
+              )}
             </div>
           </div>
 
           {fundsLocked && (
             <>
-              {/* Locked by / Locked at */}
-              <div className="mt-3 rounded-xl border border-border-subtle grid grid-cols-2 divide-x divide-border-subtle">
-                <div className="p-3 min-w-0">
-                  <p className="text-[11px] text-text-tertiary mb-0.5">Locked by</p>
-                  <p className="text-[14px] font-medium text-text-primary truncate">{order.merchant.name}</p>
-                </div>
-                <div className="p-3 min-w-0">
-                  <p className="text-[11px] text-text-tertiary mb-0.5">Locked at</p>
-                  <p className="text-[14px] font-medium text-text-primary truncate">
-                    {order.acceptedAt ? fmtLockedAt(order.acceptedAt) : "—"}
-                  </p>
-                </div>
-              </div>
-
               {/* On-chain escrow proof — collapsible. Lets the buyer verify the
                   seller's USDT is genuinely locked on Solana. Mirrors the
                   merchant's EscrowInfoCard, themed for the user app. */}
@@ -385,6 +383,16 @@ export function OrderPaymentScreen({
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-[12px] text-text-tertiary shrink-0">Network</span>
                             <span className="text-[12px] font-medium text-text-secondary">Solana</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[12px] text-text-tertiary shrink-0">Locked by</span>
+                            <span className="text-[12px] font-medium text-text-secondary truncate min-w-0 text-right">{order.merchant.name}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[12px] text-text-tertiary shrink-0">Locked at</span>
+                            <span className="text-[12px] font-medium text-text-secondary text-right">
+                              {order.acceptedAt ? fmtLockedAt(order.acceptedAt) : "—"}
+                            </span>
                           </div>
                         </div>
                       </motion.div>
