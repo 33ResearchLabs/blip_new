@@ -6,6 +6,7 @@
 
 import { ORDER_EVENTS, CHAT_EVENTS, type PusherEvent } from './events';
 import { getUserChannel, getMerchantChannel, getOrderChannel, getAllMerchantsChannel } from './channels';
+import type { ReplyReferenceSnapshot } from '@/lib/types/database';
 
 // Mock Pusher interface for when module is not available
 interface PusherLike {
@@ -252,6 +253,10 @@ interface ChatMessageData {
   // and use seq for deterministic ordering / reconnect catch-up.
   clientId?: string | null;
   seq?: number | null;
+  // Migration 177: optional reply reference forwarded so recipients render the
+  // quoted block without a follow-up fetch.
+  replyToId?: string | null;
+  replyTo?: ReplyReferenceSnapshot | null;
 }
 
 /**
@@ -279,6 +284,9 @@ export async function notifyNewMessage(data: ChatMessageData): Promise<void> {
     // temp messages by clientId and update its lastSeq cursor.
     clientId: data.clientId,
     seq: data.seq,
+    // Migration 177: reply reference (null for non-reply messages).
+    replyToId: data.replyToId ?? null,
+    replyTo: data.replyTo ?? null,
   };
 
   // 1. Order channel (existing — for open chat windows)

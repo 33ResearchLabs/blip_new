@@ -32,6 +32,21 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { usePusherOptional } from "@/context/PusherContext";
 import { getOrderChannel } from "@/lib/pusher/channels";
 import { ORDER_EVENTS, CHAT_EVENTS } from "@/lib/pusher/events";
+import {
+  ReplyReference,
+  ReplyComposer,
+  SwipeToReply,
+  useJumpToMessage,
+  ImageViewerProvider,
+  type ReplyReferenceData,
+  type ReplyDraft,
+  type ViewerImage,
+} from "@/components/chat/shared";
+import {
+  usePasteAttachments,
+  AttachmentPreviewList,
+  type ChatAttachment,
+} from "@/components/paste-attachments";
 import { formatLastSeen } from "./helpers";
 import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
 import type { Screen, Order } from "./types";
@@ -56,11 +71,23 @@ export interface ChatViewScreenProps {
       imageUrl?: string | null;
       isRead?: boolean;
       status?: "sending" | "sent" | "delivered" | "read" | "failed";
+      // Migration 177: reply reference (populated by the realtime hook).
+      replyToId?: string | null;
+      replyTo?: ReplyReferenceData | null;
     }>;
   } | null;
   chatMessage: string;
   setChatMessage: (m: string) => void;
-  sendChatMessage: (chatId: string, msg: string, imageUrl?: string) => void;
+  // Migration 177: widened to the realtime hook's full signature so the reply
+  // target lands in the correct (5th) slot. fileData is unused here but kept for
+  // positional correctness.
+  sendChatMessage: (
+    chatId: string,
+    msg: string,
+    imageUrl?: string,
+    fileData?: { fileUrl: string; fileName: string; fileSize: number; mimeType: string },
+    replyTo?: ReplyReferenceData | null,
+  ) => void;
   chatMessagesRef: RefObject<HTMLDivElement | null>;
   // Infinite-scroll pagination
   onLoadOlder?: () => Promise<boolean | void>;
@@ -637,17 +664,103 @@ export const ChatViewScreen = ({
     [startImageUpload],
   );
 
+  // ─── Reply (Migration 177) ─────────────────────────────────────────────
+  const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
+
+  // ─── Paste-to-attach: pasted images ride the existing Cloudinary upload ──
+  const [pasteAtts, setPasteAtts] = useState<ChatAttachment[]>([]);
+  const paste = usePasteAttachments({
+    attachments: pasteAtts,
+    onAttachmentsChange: setPasteAtts,
+    acceptedTypes: ["image/*"],
+    maxFiles: 5,
+    maxFileSize: 10 * 1024 * 1024,
+  });
+
+  const { flashId, jumpTo } = useJumpToMessage({
+    loadOlder: onLoadOlder ? async () => (await onLoadOlder()) !== false : undefined,
+  });
+
+  const canReplyNow = !!chatEnabled;
+
+  const buildReplyDraft = (
+    msg: { id: string; text: string; senderName?: string; messageType?: string; imageUrl?: string | null },
+    mine: boolean,
+  ): ReplyDraft => {
+    const kind = msg.messageType === "image" || msg.imageUrl ? "image" : "text";
+    const preview = kind === "image" ? "Photo" : (msg.text || "").slice(0, 140);
+    return {
+      id: msg.id,
+      // senderType is not rendered in the reference; the server rebuilds the
+      // authoritative snapshot on send. 'user' is a harmless optimistic default.
+      senderType: "user",
+      senderName: msg.senderName ?? null,
+      kind,
+      preview,
+      isMe: mine,
+    };
+  };
+
+  const draftToRef = (d: ReplyDraft): ReplyReferenceData => ({
+    id: d.id,
+    senderType: d.senderType,
+    senderName: d.senderName,
+    kind: d.kind,
+    preview: d.preview,
+  });
+
   const handleSend = () => {
     if (!activeChat) return;
     if (pendingImage) {
       return;
     }
+    // Pasted images: route each through the SAME signed-Cloudinary upload + send
+    // pipeline the paperclip uses. A fresh object URL is passed so PasteAttachments
+    // revoking its own preview URLs doesn't blank the optimistic upload bubble.
+    if (pasteAtts.length > 0) {
+      const caption = chatMessage.trim();
+      stopTyping();
+      pasteAtts.forEach((att, i) => {
+        startImageUpload(
+          att.file,
+          URL.createObjectURL(att.file),
+          i === 0 ? caption : "",
+          `temp-paste-${att.id}`,
+        );
+      });
+      setPasteAtts([]);
+      setChatMessage("");
+      setReplyDraft(null);
+      return;
+    }
     if (chatMessage.trim()) {
       stopTyping(); // Clear typing indicator on send
-      sendChatMessage(activeChat.id, chatMessage.trim());
+      sendChatMessage(
+        activeChat.id,
+        chatMessage.trim(),
+        undefined,
+        undefined,
+        replyDraft ? draftToRef(replyDraft) : null,
+      );
       setChatMessage("");
+      setReplyDraft(null);
     }
   };
+
+  // Ordered list of every image in the conversation — feeds the shared viewer's
+  // filmstrip + prev/next navigation.
+  const viewerImages = useMemo<ViewerImage[]>(
+    () =>
+      (activeChat?.messages ?? [])
+        .filter((m) => m.messageType === "image" && m.imageUrl)
+        .map((m) => ({
+          url: m.imageUrl as string,
+          caption: m.text && m.text !== "Photo" ? m.text : undefined,
+          senderName: m.senderName,
+          timestamp: m.timestamp,
+        })),
+    [activeChat?.messages],
+  );
 
   return (
     <>
@@ -782,11 +895,25 @@ export const ChatViewScreen = ({
 
       {/* Messages Area — only this scrolls; min-h-0 lets flex-1 actually
           constrain inside the flex column instead of growing past it. */}
+      <ImageViewerProvider images={viewerImages}>
       <div
         ref={chatMessagesRef}
         onScroll={handleChatScroll}
-        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 bg-surface-base"
+        onDrop={paste.onDrop}
+        onDragOver={paste.onDragOver}
+        onDragEnter={paste.onDragEnter}
+        onDragLeave={paste.onDragLeave}
+        className="relative flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 bg-surface-base"
       >
+        {/* Drag-and-drop overlay — shown while a file is dragged over the chat */}
+        {paste.isDragActive && (
+          <div className="pointer-events-none sticky inset-x-0 top-0 z-30 flex h-full items-center justify-center rounded-lg border-2 border-dashed border-accent/70 bg-black/40 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-2 text-accent">
+              <Paperclip className="h-8 w-8" />
+              <span className="text-sm font-medium">Drop image to attach</span>
+            </div>
+          </div>
+        )}
         {/* Older-messages loading spinner */}
         {isLoadingOlder && (
           <div className="flex items-center justify-center py-2">
@@ -912,8 +1039,23 @@ export const ChatViewScreen = ({
             return (
               <div
                 key={msg.id}
-                className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+                data-message-id={msg.id}
+                className={
+                  flashId === msg.id ? "rounded-lg ring-2 ring-indigo-400/70" : ""
+                }
               >
+                <SwipeToReply
+                  onReply={() => setReplyDraft(buildReplyDraft(msg, isMe))}
+                  canReply={
+                    canReplyNow &&
+                    msg.messageType !== "system" &&
+                    // Wait until confirmed — a temp id can't be a reply target
+                    // the server can resolve.
+                    msg.status !== "sending" &&
+                    msg.status !== "failed"
+                  }
+                >
+                <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
                     isMe
@@ -921,6 +1063,13 @@ export const ChatViewScreen = ({
                       : "rounded-bl-md bg-surface-card text-text-primary"
                   }`}
                 >
+                  {msg.replyTo && (
+                    <ReplyReference
+                      reference={msg.replyTo}
+                      onJump={jumpTo}
+                      className="mb-1.5"
+                    />
+                  )}
                   {isImageMsg ? (
                     <ImageMessageBubble
                       imageUrl={msg.imageUrl!}
@@ -969,6 +1118,8 @@ export const ChatViewScreen = ({
                       ))}
                   </div>
                 </div>
+                </div>
+                </SwipeToReply>
               </div>
             );
           })
@@ -1006,6 +1157,7 @@ export const ChatViewScreen = ({
               </div>
             ))}
       </div>
+      </ImageViewerProvider>
 
       {/* Full-screen image preview modal (WhatsApp-style) */}
       {pendingImage && (
@@ -1076,6 +1228,19 @@ export const ChatViewScreen = ({
             onChange={handleFileSelect}
             className="hidden"
           />
+          {replyDraft && (
+            <ReplyComposer
+              draft={replyDraft}
+              onCancel={() => setReplyDraft(null)}
+              className="mb-2 w-full"
+            />
+          )}
+          {pasteAtts.length > 0 && (
+            <AttachmentPreviewList
+              attachments={pasteAtts}
+              onRemove={paste.removeAttachment}
+            />
+          )}
           <div className="flex items-center gap-2 w-full">
             {/* Pill: text input + attach button live in one rounded row.
                 min-w-0 on the wrapper + the input is what actually prevents
@@ -1096,6 +1261,7 @@ export const ChatViewScreen = ({
                     handleSend();
                   }
                 }}
+                onPaste={paste.onPaste}
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -1115,9 +1281,9 @@ export const ChatViewScreen = ({
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleSend}
-              disabled={!chatMessage.trim() && !pendingImage}
+              disabled={!chatMessage.trim() && !pendingImage && pasteAtts.length === 0}
               className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-50 ${
-                chatMessage.trim() || pendingImage
+                chatMessage.trim() || pendingImage || pasteAtts.length > 0
                   ? "bg-accent"
                   : "bg-surface-card"
               }`}

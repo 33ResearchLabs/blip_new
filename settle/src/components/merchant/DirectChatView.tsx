@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeft, Send, Store, User, CheckCheck, Paperclip, Loader2, X, Image as ImageIcon } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { ReceiptCard } from '@/components/chat/cards/ReceiptCard';
 import { ImageMessageBubble, type ImageUploadStatus } from '@/components/chat/ImageMessageBubble';
+import { ChatImageViewer, type ViewerImage } from '@/components/chat/shared';
 import { compressImage } from '@/lib/utils/compressImage';
 import dynamic from 'next/dynamic';
 
@@ -403,6 +404,26 @@ export function DirectChatView({
     };
   }, [pendingImage]);
 
+  // Shared Telegram-style image viewer. DirectChatView renders images inline
+  // (not through ChatRoom), so it drives the viewer with local state.
+  const [imgIndex, setImgIndex] = useState<number | null>(null);
+  const viewerImages = useMemo<ViewerImage[]>(
+    () =>
+      messages
+        .filter((m) => m.messageType === 'image' && m.imageUrl)
+        .map((m) => ({
+          url: m.imageUrl as string,
+          caption: m.text !== 'Photo' ? m.text : undefined,
+          senderName: m.from === 'me' ? 'You' : contactName,
+          timestamp: m.timestamp,
+        })),
+    [messages, contactName],
+  );
+  const openImage = (url: string) => {
+    const i = viewerImages.findIndex((im) => im.url === url);
+    if (i >= 0) setImgIndex(i);
+  };
+
   // Group messages by date and detect consecutive same-sender groups
   let lastDate = '';
 
@@ -520,14 +541,13 @@ export function DirectChatView({
                       <div className="max-w-[80%]">
                         <div className="px-2.5 py-1.5 rounded-lg rounded-bl-sm bg-foreground/[0.04] border border-foreground/[0.06] text-[12px] text-foreground/80">
                           {msg.messageType === 'image' && msg.imageUrl && (
-                            <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
-                              <img
-                                src={msg.imageUrl}
-                                alt="Shared image"
-                                className="max-w-full max-h-36 rounded-md mb-1 object-contain"
-                                loading="lazy"
-                              />
-                            </a>
+                            <img
+                              src={msg.imageUrl}
+                              alt="Shared image"
+                              className="max-w-full max-h-36 rounded-md mb-1 object-contain cursor-zoom-in"
+                              loading="lazy"
+                              onClick={() => openImage(msg.imageUrl!)}
+                            />
                           )}
                           {msg.text !== 'Photo' && <span>{msg.text}</span>}
                           <span className="text-[12px] text-foreground/20 ml-1.5 whitespace-nowrap font-mono">
@@ -542,14 +562,13 @@ export function DirectChatView({
                       <div className="max-w-[80%]">
                         <div className="px-2.5 py-1.5 rounded-lg rounded-br-sm bg-white/[0.06] border border-white/[0.12] text-[12px] text-foreground/80">
                           {msg.messageType === 'image' && msg.imageUrl && (
-                            <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer">
-                              <img
-                                src={msg.imageUrl}
-                                alt="Shared image"
-                                className="max-w-full max-h-36 rounded-md mb-1 object-contain"
-                                loading="lazy"
-                              />
-                            </a>
+                            <img
+                              src={msg.imageUrl}
+                              alt="Shared image"
+                              className="max-w-full max-h-36 rounded-md mb-1 object-contain cursor-zoom-in"
+                              loading="lazy"
+                              onClick={() => openImage(msg.imageUrl!)}
+                            />
                           )}
                           {msg.text !== 'Photo' && <span>{msg.text}</span>}
                           <span className="inline-flex items-center gap-0.5 ml-1.5 align-bottom">
@@ -604,6 +623,10 @@ export function DirectChatView({
             width="100%"
             height={280}
             theme={"dark" as any}
+            // Render emojis with the OS font instead of CDN images — the CSP
+            // img-src doesn't allow cdn.jsdelivr.net, so the default image
+            // style loads blank tiles.
+            emojiStyle={"native" as any}
             searchDisabled
             skinTonesDisabled
             previewConfig={{ showPreview: false }}
@@ -718,6 +741,15 @@ export function DirectChatView({
           </button>
         </div>
       </div>
+
+      {imgIndex !== null && viewerImages[imgIndex] && (
+        <ChatImageViewer
+          images={viewerImages}
+          index={imgIndex}
+          onIndexChange={setImgIndex}
+          onClose={() => setImgIndex(null)}
+        />
+      )}
     </div>
   );
 }

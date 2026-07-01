@@ -20,6 +20,7 @@ import { checkRateLimit, MESSAGE_LIMIT } from '@/lib/middleware/rateLimit';
 import { logger } from '@/lib/logger';
 import { notifyNewMessage, notifyNewDirectMessage, notifyMessagesRead, triggerEvent } from '@/lib/pusher/server';
 import { CHAT_EVENTS } from '@/lib/pusher/events';
+import type { ReplyReferenceSnapshot } from '@/lib/types/database';
 
 // Validate order ID parameter
 async function validateOrderId(id: string): Promise<{ valid: boolean; error?: string }> {
@@ -127,7 +128,7 @@ export async function POST(
       return validationErrorResponse(errors);
     }
 
-    const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type, client_id } = parseResult.data;
+    const { sender_type, sender_id, content, message_type, image_url, file_url, file_name, file_size, mime_type, client_id, reply_to_id } = parseResult.data;
 
     // ── URL validation: prevent malicious/spoofed image/file URLs ──
     // Only allow Cloudinary URLs. A tampered client could pass an arbitrary
@@ -237,6 +238,7 @@ export async function POST(
       file_size,
       mime_type,
       client_id,  // Phase 3: idempotency key, optional
+      reply_to_id,  // Migration 177: reply reference, optional
     });
 
     // Mark order as having manual messages (fire-and-forget, don't block response)
@@ -266,6 +268,11 @@ export async function POST(
       buyerMerchantId: order.buyer_merchant_id,
       clientId: (message as { client_id?: string | null }).client_id ?? null,
       seq: (message as { seq?: number | null }).seq ?? null,
+      // Migration 177: forward the reply reference so recipients render the
+      // quoted block without a follow-up fetch. Built server-side in sendMessage.
+      replyToId: message.reply_to_id ?? null,
+      replyTo:
+        (message.metadata as { replyTo?: ReplyReferenceSnapshot } | null | undefined)?.replyTo ?? null,
     });
 
     // ── Merchant aggregated channel: message preview + unread (fire-and-forget) ──

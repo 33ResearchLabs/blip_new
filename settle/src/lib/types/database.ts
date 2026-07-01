@@ -335,6 +335,21 @@ export interface OrderEvent {
   created_at: Date;
 }
 
+/**
+ * Denormalized snapshot of the message a reply points at. Stored inside
+ * `chat_messages.metadata.replyTo` so the reference still renders even if the
+ * original is paginated out of the loaded window or later soft-deleted. Always
+ * built server-side (never from client input) to prevent forged references.
+ */
+export interface ReplyReferenceSnapshot {
+  id: string;
+  senderType: ActorType;
+  senderName: string | null;
+  /** The original message's message_type, e.g. 'text' | 'image' | 'file'. */
+  kind: string;
+  preview: string;
+}
+
 export interface ChatMessage {
   id: string;
   order_id: string;
@@ -347,6 +362,10 @@ export interface ChatMessage {
   is_read: boolean;
   read_at: Date | null;
   created_at: Date;
+  // Migration 177: optional reply reference. `reply_to_id` links to the original
+  // message; `metadata.replyTo` carries the denormalized snapshot for rendering.
+  reply_to_id?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface UserBankAccount {

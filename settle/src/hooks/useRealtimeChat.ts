@@ -15,6 +15,7 @@ import {
   getOrderPresenceChannel,
 } from "@/lib/pusher/channels";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
+import type { ReplyReferenceData } from "@/components/chat/shared";
 
 export interface ChatMessage {
   id: string;
@@ -51,6 +52,10 @@ export interface ChatMessage {
   // Per-message order context. Optional for backward compat — populated once
   // chats are merged per (user, merchant) and each message carries its own orderId.
   orderId?: string;
+  // Migration 177: reply reference. replyToId links to the original message;
+  // replyTo is the denormalized snapshot for rendering the quoted block.
+  replyToId?: string | null;
+  replyTo?: ReplyReferenceData | null;
 }
 
 export interface PresenceMember {
@@ -108,6 +113,9 @@ interface DbMessage {
   // Phase 3 — present on rows after migration 076
   client_id?: string | null;
   seq?: number | null;
+  // Migration 177 — present on rows after migration 177
+  reply_to_id?: string | null;
+  metadata?: { replyTo?: ReplyReferenceData } | Record<string, unknown> | null;
 }
 
 // Pusher message event
@@ -138,6 +146,9 @@ interface PusherMessageEvent {
   // Phase 3
   clientId?: string | null;
   seq?: number | null;
+  // Migration 177
+  replyToId?: string | null;
+  replyTo?: ReplyReferenceData | null;
 }
 
 // Pusher typing event
@@ -399,6 +410,10 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         // Phase 3: carry through for ordering + dedup. Both null on legacy rows.
         clientId: dbMsg.client_id ?? undefined,
         seq: dbMsg.seq ?? undefined,
+        // Migration 177: reply reference (null on non-reply / legacy rows).
+        replyToId: dbMsg.reply_to_id ?? null,
+        replyTo:
+          (dbMsg.metadata as { replyTo?: ReplyReferenceData } | null | undefined)?.replyTo ?? null,
       };
     },
     [],
@@ -432,6 +447,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         // Phase 3: optimistic temp replacement matches by clientId.
         clientId: event.clientId ?? undefined,
         seq: event.seq ?? undefined,
+        // Migration 177: reply reference forwarded on the message event.
+        replyToId: event.replyToId ?? null,
+        replyTo: event.replyTo ?? null,
       };
     },
     [],
@@ -1020,6 +1038,9 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         fileSize: number;
         mimeType: string;
       },
+      // Migration 177: optional reply target (snapshot of the message being
+      // replied to). Backward compatible — omitted for normal sends.
+      replyTo?: ReplyReferenceData | null,
     ) => {
       if (!text.trim() && !imageUrl && !fileData) return;
 
@@ -1060,6 +1081,11 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
         mimeType: fileData?.mimeType,
         isRead: false,
         status: "sending",
+        // Migration 177: optimistic reply snapshot for instant render. The
+        // server rebuilds the authoritative snapshot and the Pusher echo
+        // replaces this temp message by clientId.
+        replyToId: replyTo?.id ?? null,
+        replyTo: replyTo ?? null,
       };
 
       setChatWindows((prev) =>
@@ -1104,6 +1130,7 @@ export function useRealtimeChat(options: UseRealtimeChatOptions = {}) {
               file_size: fileData?.fileSize,
               mime_type: fileData?.mimeType,
               client_id: clientId, // ◄ Phase 3: server dedupes on this
+              reply_to_id: replyTo?.id, // ◄ Migration 177: reply reference
             }),
           },
         );

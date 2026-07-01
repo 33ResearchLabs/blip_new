@@ -73,6 +73,11 @@ import { usePusher } from "@/context/PusherContext";
 import { useOrderActionDispatch } from "@/hooks/useOrderActionDispatch";
 import { ImageUpload } from "@/components/chat/ImageUpload";
 import { ReceiptCard } from "@/components/chat/cards";
+import {
+  ImageViewerProvider,
+  useImageViewerOptional,
+  type ViewerImage,
+} from "@/components/chat/shared";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { orderActionKey } from "@/lib/api/idempotencyKeys";
 import type { BackendOrder, ActionType } from "@/types/backendOrder";
@@ -348,6 +353,21 @@ export default function TradeChatPage() {
   }, [orderConversations, merchantId]);
 
   const activeWindow = chat.chatWindows.find((w) => w.orderId === activeOrderId);
+
+  // Ordered list of every image in the open conversation — feeds the shared
+  // Telegram-style viewer's filmstrip + prev/next navigation.
+  const chatViewerImages = useMemo<ViewerImage[]>(
+    () =>
+      (activeWindow?.messages ?? [])
+        .filter((m) => !!m.imageUrl)
+        .map((m) => ({
+          url: m.imageUrl as string,
+          caption: m.text && m.text !== "Photo" ? m.text : undefined,
+          senderName: m.senderName,
+          timestamp: m.timestamp,
+        })),
+    [activeWindow?.messages],
+  );
 
   // Mark read whenever the open conversation gains messages.
   const lastCountRef = useRef(0);
@@ -796,7 +816,9 @@ export default function TradeChatPage() {
                     {activeWindow ? "No messages yet — say hello." : <Loader2 className="w-5 h-5 animate-spin" />}
                   </div>
                 ) : (
-                  <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} viewerRole={order?.my_role === "buyer" || order?.my_role === "seller" ? order.my_role : null} onRetry={(id) => chat.retryMessage(activeWindow.id, id)} />
+                  <ImageViewerProvider images={chatViewerImages}>
+                    <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} viewerRole={order?.my_role === "buyer" || order?.my_role === "seller" ? order.my_role : null} onRetry={(id) => chat.retryMessage(activeWindow.id, id)} />
+                  </ImageViewerProvider>
                 )}
               </div>
 
@@ -1150,6 +1172,7 @@ function MessageItem({
   viewerRole?: "buyer" | "seller" | null;
   onRetry?: (messageId: string) => void;
 }) {
+  const viewer = useImageViewerOptional();
   // Rich receipt cards (Payment Sent / Trade Completed) when the message
   // carries structured receipt data.
   if (m.messageType === "receipt" && m.receiptData) {
@@ -1189,7 +1212,14 @@ function MessageItem({
         }`}
       >
         {m.imageUrl && (
-          <img src={m.imageUrl} alt="" className="rounded-lg mb-1 max-h-48 object-cover" />
+          <img
+            src={m.imageUrl}
+            alt=""
+            className="rounded-lg mb-1 max-h-48 object-cover cursor-zoom-in"
+            onClick={() =>
+              viewer ? viewer.open(m.imageUrl!) : window.open(m.imageUrl!, "_blank", "noopener")
+            }
+          />
         )}
         {m.fileUrl && !m.imageUrl && (
           <a
@@ -1594,12 +1624,12 @@ function TradeDetailsPane({
         <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Need Help?</p>
         <button
           type="button"
-          title="Open a support ticket"
+          title="Support"
           onClick={() => openIssueReporter()}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-white/12 text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-sm transition-colors"
         >
           <LifeBuoy className="w-4 h-4" />
-          Open Support Ticket
+          Support
         </button>
       </div>
     </div>
