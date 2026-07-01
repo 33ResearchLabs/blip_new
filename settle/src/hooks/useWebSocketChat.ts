@@ -63,7 +63,7 @@ export interface ChatMessage {
   senderType?: ActorType;
   senderName?: string;
   isHighlighted?: boolean;
-  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   // Phase 3: idempotency + ordering, optional for backward compat.
   clientId?: string;
   seq?: number;
@@ -956,14 +956,16 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         });
 
         if (!res.ok) {
-          // Mark the optimistic message as failed so the user can see + retry
+          // Mark the optimistic message as failed so the user can see it didn't
+          // send (previously this incorrectly re-set 'sending', leaving the
+          // message stuck on the sending state forever).
           setChatWindows((prev) =>
             prev.map((w) => {
               if (w.id !== chatId) return w;
               return {
                 ...w,
                 messages: w.messages.map((m) =>
-                  m.id === tempId ? { ...m, status: 'sending' as const } : m
+                  m.id === tempId ? { ...m, status: 'failed' as const } : m
                 ),
               };
             })
@@ -979,8 +981,20 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         // the handleNewMessage path (replace-by-clientId post-migration,
         // or first-temp fallback pre-migration).
       } catch {
-        // Network failure — keep the optimistic message visible so the
-        // user knows it exists locally; the next reload will resync.
+        // Network / thrown failure — mark the optimistic message as failed so
+        // the user sees it didn't go through (rather than a perpetual
+        // "sending"). The message stays visible locally for context.
+        setChatWindows((prev) =>
+          prev.map((w) => {
+            if (w.id !== chatId) return w;
+            return {
+              ...w,
+              messages: w.messages.map((m) =>
+                m.id === tempId ? { ...m, status: 'failed' as const } : m
+              ),
+            };
+          })
+        );
       }
     },
     [actorType]

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { OrderChatView } from "@/components/merchant/OrderChatView";
 import { MerchantChatTabs } from "@/components/merchant/MerchantChatTabs";
@@ -30,6 +31,20 @@ export function MobileChatView({
   onClearAllUnread,
   playSound,
 }: MobileChatViewProps) {
+  // The fallback below renders while `merchantId` is still resolving. For a
+  // logged-in merchant that's near-instant, but if identity never resolves the
+  // "Loading chats…" copy would sit forever and read as a stuck loader. After a
+  // short grace period, switch to an honest "still connecting" hint.
+  const [slowLoad, setSlowLoad] = useState(false);
+  useEffect(() => {
+    if (merchantId) {
+      setSlowLoad(false);
+      return;
+    }
+    const t = setTimeout(() => setSlowLoad(true), 8000);
+    return () => clearTimeout(t);
+  }, [merchantId]);
+
   return (
     // In chat mode the parent <main> uses overflow-hidden with NO bottom
     // padding, so this div is the sole clearance for the fixed bottom nav
@@ -70,7 +85,9 @@ export function MobileChatView({
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center py-12">
           <MessageCircle className="w-12 h-12 text-gray-600 mb-3" />
-          <p className="text-sm text-foreground/35">Loading chats...</p>
+          <p className="text-sm text-foreground/35">
+            {slowLoad ? "Still connecting… pull down to refresh." : "Loading chats..."}
+          </p>
         </div>
       )}
     </div>
