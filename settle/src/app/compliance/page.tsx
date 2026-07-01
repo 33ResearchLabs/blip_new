@@ -36,6 +36,7 @@ import type { DisputeOrder } from "@/hooks/useDisputeManagement";
 import { networkLabel } from "@/lib/solana/networkLabel";
 import DisputeCard, { getEmoji, formatTimeAgo } from "@/components/compliance/DisputeCard";
 import { ChatRoom } from "@/components/chat/ChatRoom";
+import { ReplyReference } from "@/components/chat/shared";
 import ResolveModal from "@/components/compliance/ResolveModal";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import dynamic from "next/dynamic";
@@ -936,6 +937,7 @@ export default function ComplianceDashboard() {
                         return (
                           <div
                             key={msg.id}
+                            data-message-id={msg.id}
                             className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
                           >
                             <div
@@ -947,6 +949,11 @@ export default function ComplianceDashboard() {
                                     : "bg-purple-500/10 border border-purple-500/20 text-[var(--color-text-primary)]"
                               }`}
                             >
+                              {/* Reply reference (Migration 177) — display-only on the
+                                  simplified mobile compliance view */}
+                              {msg.replyTo && (
+                                <ReplyReference reference={msg.replyTo} className="mb-1.5" />
+                              )}
                               {msg.text}
                             </div>
                           </div>
@@ -1194,8 +1201,8 @@ export default function ComplianceDashboard() {
                       messages={activeChat.messages}
                       currentUserType="compliance"
                       currentUserId={member?.id}
-                      onSendMessage={(text, imageUrl, fileData) => {
-                        sendMessage(activeChat.id, text, imageUrl, fileData);
+                      onSendMessage={(text, imageUrl, fileData, replyTo) => {
+                        sendMessage(activeChat.id, text, imageUrl, fileData, replyTo);
                       }}
                       onTyping={(typing) => {
                         if ('sendTypingIndicator' in chatHookResult) {

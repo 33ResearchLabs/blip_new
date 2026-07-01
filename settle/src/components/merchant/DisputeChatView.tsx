@@ -191,8 +191,8 @@ export function DisputeChatView({ orderId, merchantId, userName, onBack, onSendS
             messages={chatWindow.messages}
             currentUserType="merchant"
             currentUserId={merchantId}
-            onSendMessage={(text, imageUrl, fileData) => {
-              sendMessage(chatWindow.id, text, imageUrl, fileData);
+            onSendMessage={(text, imageUrl, fileData, replyTo) => {
+              sendMessage(chatWindow.id, text, imageUrl, fileData, replyTo);
               onSendSound?.();
             }}
             onTyping={(isTyping) => sendTypingIndicator(chatWindow.id, isTyping)}

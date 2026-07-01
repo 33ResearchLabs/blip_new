@@ -46,6 +46,7 @@ import { SellCompletedScreen } from "./SellCompletedScreen";
 import { OrderCompletedScreen } from "./OrderCompletedScreen";
 import { AppealScreen } from "./AppealScreen";
 import { getDisplayOrderId } from "@/lib/displayOrderId";
+import { ChatImageViewer, type ViewerImage } from "@/components/chat/shared";
 import {
   type RefObject,
   useState as useLocalState,
@@ -482,6 +483,25 @@ export const OrderDetailScreen = ({
     }
     return null;
   }, [activeChat?.messages]);
+
+  // Shared Telegram-style image viewer (matches ChatViewScreen). OrderDetail
+  // renders sent chat images inline, so it drives the viewer with local state.
+  const [chatImgIndex, setChatImgIndex] = useLocalState<number | null>(null);
+  const chatViewerImages = useLocalMemo<ViewerImage[]>(
+    () =>
+      (activeChat?.messages ?? [])
+        .filter((m) => m.messageType === "image" && m.imageUrl)
+        .map((m) => ({
+          url: m.imageUrl as string,
+          caption: m.text !== "Photo" ? m.text : undefined,
+          timestamp: m.timestamp,
+        })),
+    [activeChat?.messages],
+  );
+  const openChatImage = (url: string) => {
+    const i = chatViewerImages.findIndex((im) => im.url === url);
+    if (i >= 0) setChatImgIndex(i);
+  };
   // For a BUY order still in the matching phase, show the rich tracking view as
   // the primary screen instead of the step-body "Order Details" screen.
   // Keyed off the MAPPED UI step (step 1 = matching) rather than the raw status
@@ -3890,18 +3910,13 @@ export const OrderDetailScreen = ({
                             }`}
                           >
                             {msg.messageType === "image" && msg.imageUrl && (
-                              <a
-                                href={msg.imageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <img
-                                  src={msg.imageUrl}
-                                  alt="Shared image"
-                                  className="max-w-full max-h-48 rounded-xl mb-1 object-contain"
-                                  loading="lazy"
-                                />
-                              </a>
+                              <img
+                                src={msg.imageUrl}
+                                alt="Shared image"
+                                className="max-w-full max-h-48 rounded-xl mb-1 object-contain cursor-zoom-in"
+                                loading="lazy"
+                                onClick={() => openChatImage(msg.imageUrl!)}
+                              />
                             )}
                             {msg.text !== "Photo" && (
                               <span className="whitespace-pre-wrap break-words">{msg.text}</span>
@@ -3955,6 +3970,15 @@ export const OrderDetailScreen = ({
                       </div>
                     </div>
                   ))
+                )}
+
+                {chatImgIndex !== null && chatViewerImages[chatImgIndex] && (
+                  <ChatImageViewer
+                    images={chatViewerImages}
+                    index={chatImgIndex}
+                    onIndexChange={setChatImgIndex}
+                    onClose={() => setChatImgIndex(null)}
+                  />
                 )}
 
                 {/* Show pending resolution if dispute exists and has a proposal */}
@@ -4024,6 +4048,10 @@ export const OrderDetailScreen = ({
                     width="100%"
                     height={350}
                     theme={"dark" as any}
+                    // Render emojis with the OS font instead of CDN images —
+                    // the CSP img-src doesn't allow cdn.jsdelivr.net, so the
+                    // default image style loads blank tiles.
+                    emojiStyle={"native" as any}
                     searchDisabled
                     skinTonesDisabled
                     previewConfig={{ showPreview: false }}

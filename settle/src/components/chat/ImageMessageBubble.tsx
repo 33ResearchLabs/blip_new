@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { X, RotateCcw, Loader2, Check, Download, ExternalLink } from 'lucide-react';
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { useImageViewerOptional } from '@/components/chat/shared';
 
 export type ImageUploadStatus = 'uploading' | 'sent' | 'failed' | 'cancelled';
 
@@ -44,6 +45,7 @@ export function ImageMessageBubble({
   onRetry,
   isOwn = true,
 }: ImageMessageBubbleProps) {
+  const viewer = useImageViewerOptional();
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isImgLoaded, setIsImgLoaded] = useState(false);
 
@@ -52,7 +54,11 @@ export function ImageMessageBubble({
   const showRetry = uploadStatus === 'failed';
 
   const handleClick = () => {
-    if (canOpenLightbox) setIsLightboxOpen(true);
+    if (!canOpenLightbox) return;
+    // Prefer the shared Telegram-style viewer (filmstrip + zoom) when the
+    // surface provides one; otherwise fall back to the local lightbox.
+    if (viewer) viewer.open(imageUrl);
+    else setIsLightboxOpen(true);
   };
 
   const handleDownload = async () => {

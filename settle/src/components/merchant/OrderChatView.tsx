@@ -1,32 +1,63 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useRef } from 'react';
-import { ArrowUpRight, ArrowDownLeft, ChevronLeft } from 'lucide-react';
-import { ChatRoom } from '@/components/chat/ChatRoom';
-import { useRealtimeChat } from '@/hooks/useRealtimeChat';
-import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
+import { useEffect, useState, useRef } from "react";
+import { ArrowUpRight, ArrowDownLeft, ChevronLeft } from "lucide-react";
+import { ChatRoom } from "@/components/chat/ChatRoom";
+import { useRealtimeChat } from "@/hooks/useRealtimeChat";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 
 interface OrderChatViewProps {
   orderId: string;
   merchantId: string;
   userName: string;
   orderNumber: string;
-  orderType?: 'buy' | 'sell';
+  orderType?: "buy" | "sell";
   userAvatarUrl?: string | null;
   onBack: () => void;
   onSendSound?: () => void;
 }
 
 function getUserEmoji(username: string): string {
-  const emojis = ['🦊', '🐻', '🐼', '🐨', '🦁', '🐯', '🐸', '🐙', '🦋', '🐳', '🦄', '🐲'];
-  const hash = username.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+  const emojis = [
+    "🦊",
+    "🐻",
+    "🐼",
+    "🐨",
+    "🦁",
+    "🐯",
+    "🐸",
+    "🐙",
+    "🦋",
+    "🐳",
+    "🦄",
+    "🐲",
+  ];
+  const hash = username.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
   return emojis[hash % emojis.length];
 }
 
-export function OrderChatView({ orderId, merchantId, userName, orderNumber, orderType, userAvatarUrl, onBack, onSendSound }: OrderChatViewProps) {
-  const { chatWindows, openChat, sendMessage, markAsRead, sendTypingIndicator, loadOlderMessages, hasOlderMessages, isLoadingOlderMessages } = useRealtimeChat({
+export function OrderChatView({
+  orderId,
+  merchantId,
+  userName,
+  orderNumber,
+  orderType,
+  userAvatarUrl,
+  onBack,
+  onSendSound,
+}: OrderChatViewProps) {
+  const {
+    chatWindows,
+    openChat,
+    sendMessage,
+    markAsRead,
+    sendTypingIndicator,
+    loadOlderMessages,
+    hasOlderMessages,
+    isLoadingOlderMessages,
+  } = useRealtimeChat({
     maxWindows: 1,
-    actorType: 'merchant',
+    actorType: "merchant",
     actorId: merchantId,
   });
 
@@ -45,19 +76,22 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
     if (!orderId || mountReadFiredRef.current === orderId) return;
     mountReadFiredRef.current = orderId;
     fetchWithAuth(`/api/orders/${orderId}/messages`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reader_type: 'merchant' }),
-    }).catch(() => { /* best-effort — markAsRead below retries on new messages */ });
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reader_type: "merchant" }),
+    }).catch(() => {
+      /* best-effort — markAsRead below retries on new messages */
+    });
   }, [orderId]);
 
   // Also mark read at the chat-window level when new messages arrive while
   // this panel is open (covers messages that land after mount).
-  const chatWindowForRead = chatWindows.find(w => w.orderId === orderId);
+  const chatWindowForRead = chatWindows.find((w) => w.orderId === orderId);
   const lastMessageCountRef = useRef(0);
   useEffect(() => {
     if (!chatWindowForRead) return;
-    if (chatWindowForRead.messages.length === lastMessageCountRef.current) return;
+    if (chatWindowForRead.messages.length === lastMessageCountRef.current)
+      return;
     lastMessageCountRef.current = chatWindowForRead.messages.length;
     markAsRead(chatWindowForRead.id);
   }, [chatWindowForRead, chatWindowForRead?.messages.length, markAsRead]);
@@ -76,7 +110,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
   // the common case of chats that do have history and shouldn't wait
   // the full 800ms to render.
   useEffect(() => {
-    const win = chatWindows.find(w => w.orderId === orderId);
+    const win = chatWindows.find((w) => w.orderId === orderId);
     if (win && win.messages.length > 0 && initialLoadPending) {
       setInitialLoadPending(false);
     }
@@ -89,7 +123,7 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
   // Resolved server-side via resolveTradeRole and returned as `my_role` — the
   // header badge is driven by this so it reflects WHO is viewing (incl. M2M),
   // not the order's type.
-  const [viewerRole, setViewerRole] = useState<'buyer' | 'seller' | null>(null);
+  const [viewerRole, setViewerRole] = useState<"buyer" | "seller" | null>(null);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -100,51 +134,78 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
         const order = data?.data || data;
         if (!cancelled) {
           setOrderStatus(order?.status || null);
-          if (order?.my_role === 'buyer' || order?.my_role === 'seller') {
+          if (order?.my_role === "buyer" || order?.my_role === "seller") {
             setViewerRole(order.my_role);
           }
           if (order?.fiat_amount && order?.fiat_currency) {
-            const symbol = order.fiat_currency === 'INR' ? '₹' : order.fiat_currency === 'AED' ? 'د.إ' : order.fiat_currency;
-            const amount = Number(order.fiat_amount).toLocaleString('en-US', { maximumFractionDigits: 0 });
-            const side = orderType === 'buy' ? 'Buy' : 'Sell';
+            const symbol =
+              order.fiat_currency === "INR"
+                ? "₹"
+                : order.fiat_currency === "AED"
+                ? "د.إ"
+                : order.fiat_currency;
+            const amount = Number(order.fiat_amount).toLocaleString("en-US", {
+              maximumFractionDigits: 0,
+            });
+            const side = orderType === "buy" ? "Buy" : "Sell";
             setOrderLabel(`@${userName} · ${side} ${symbol}${amount}`);
           }
         }
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
     };
     load();
     const interval = setInterval(load, 15000);
-    return () => { cancelled = true; clearInterval(interval); };
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [orderId, userName, orderType]);
 
-  const isChatClosed = ['completed', 'cancelled', 'expired'].includes(orderStatus || '');
+  const isChatClosed = ["completed", "cancelled", "expired"].includes(
+    orderStatus || "",
+  );
   const closedReason: string | null = isChatClosed
-    ? orderStatus === 'completed'
-      ? 'Trade completed — chat is closed. You can no longer send messages.'
-      : orderStatus === 'cancelled'
-        ? 'Trade cancelled — chat is closed. You can no longer send messages.'
-        : 'Trade expired — chat is closed. You can no longer send messages.'
+    ? orderStatus === "completed"
+      ? "Trade completed — chat is closed. You can no longer send messages."
+      : orderStatus === "cancelled"
+      ? "Trade cancelled — chat is closed. You can no longer send messages."
+      : "Trade expired — chat is closed. You can no longer send messages."
     : null;
-  const chatWindow = chatWindows.find(w => w.orderId === orderId);
+  const chatWindow = chatWindows.find((w) => w.orderId === orderId);
 
   // Badge reflects the VIEWER's role, not the order's type. The merchant here
   // is the seller on a buy order and the buyer on a sell order (and either role
   // in M2M) — `my_role` is authoritative; fall back to the orderType mapping
   // (buy → seller, sell → buyer) until the order fetch resolves it.
-  const viewerIsSeller = (viewerRole ?? (orderType === 'sell' ? 'buyer' : 'seller')) === 'seller';
+  const viewerIsSeller =
+    (viewerRole ?? (orderType === "sell" ? "buyer" : "seller")) === "seller";
   const TypeIcon = viewerIsSeller ? ArrowUpRight : ArrowDownLeft;
-  const typeLabel = viewerIsSeller ? 'SELL' : 'BUY';
+  const typeLabel = viewerIsSeller ? "SELL" : "BUY";
   // Neutral, direction-agnostic chip: white text on black (the SELL/BUY word
   // still distinguishes direction; the colour no longer encodes it).
-  const typeColor = 'text-white bg-black border-white/[0.15]';
+  const typeColor = "text-white bg-black border-white/[0.15]";
 
   // Counterparty presence for the header. In U2M the counterparty is the
   // user; in M2M it's the other merchant — so match "anyone online who isn't
   // me / compliance / system" rather than a fixed actorType.
   const isCounterpartyOnline = !!chatWindow?.presence?.some(
-    (p) => p.isOnline && p.actorId !== merchantId && p.actorType !== 'compliance' && p.actorType !== 'system',
+    (p) =>
+      p.isOnline &&
+      p.actorId !== merchantId &&
+      p.actorType !== "compliance" &&
+      p.actorType !== "system",
   );
   const isCounterpartyTyping = !!chatWindow?.isTyping;
+
+  // Show the counterparty's per-message name + avatar ONLY when a compliance
+  // officer is involved in this order's chat. Then it's a 3-way conversation
+  // (buyer/seller/compliance) where attribution matters; in a normal 1:1 trade
+  // chat the name+avatar are redundant, so they stay hidden for a cleaner view.
+  const complianceInvolved =
+    !!chatWindow?.presence?.some((p) => p.actorType === "compliance") ||
+    !!chatWindow?.messages?.some((m) => m.senderType === "compliance");
 
   return (
     <div className="h-full flex flex-col bg-background text-foreground">
@@ -162,20 +223,36 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <p className="text-xs font-medium text-foreground/80 truncate">{userName}</p>
-            <span className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded border font-mono ${typeColor}`}>
+            <p className="text-xs font-medium text-foreground/80 truncate">
+              {userName}
+            </p>
+            <span
+              className={`shrink-0 inline-flex items-center gap-0.5 text-[9px] px-1 py-0.5 rounded border font-mono ${typeColor}`}
+            >
               <TypeIcon className="w-2.5 h-2.5" />
               {typeLabel}
             </span>
           </div>
           <div className="flex items-center gap-1 mt-0.5">
             {isCounterpartyTyping ? (
-              <span className="text-[12px] font-mono text-[#f5f5f7]">typing...</span>
+              <span className="text-[12px] font-mono text-[#f5f5f7]">
+                typing...
+              </span>
             ) : (
               <>
-                <span className={`w-1.5 h-1.5 rounded-full ${isCounterpartyOnline ? 'bg-emerald-500' : 'bg-white/25'}`} />
-                <span className={`text-[12px] font-mono ${isCounterpartyOnline ? 'text-[#f5f5f7]' : 'text-foreground/35'}`}>
-                  {isCounterpartyOnline ? 'Online' : 'Offline'}
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isCounterpartyOnline ? "bg-emerald-500" : "bg-white/25"
+                  }`}
+                />
+                <span
+                  className={`text-[12px] font-mono ${
+                    isCounterpartyOnline
+                      ? "text-[#f5f5f7]"
+                      : "text-foreground/35"
+                  }`}
+                >
+                  {isCounterpartyOnline ? "Online" : "Offline"}
                 </span>
               </>
             )}
@@ -199,13 +276,16 @@ export function OrderChatView({ orderId, merchantId, userName, orderNumber, orde
             viewerRole={viewerRole}
             userName={userName}
             userAvatarUrl={userAvatarUrl}
-            counterpartyNameClass="text-white bg-black"
+            counterpartyNameClass="text-white"
+            showCounterpartyIdentity={complianceInvolved}
             orderLabel={orderLabel ?? undefined}
-            onSendMessage={(text, imageUrl, fileData) => {
-              sendMessage(chatWindow.id, text, imageUrl, fileData);
+            onSendMessage={(text, imageUrl, fileData, replyTo) => {
+              sendMessage(chatWindow.id, text, imageUrl, fileData, replyTo);
               onSendSound?.();
             }}
-            onTyping={(isTyping) => sendTypingIndicator(chatWindow.id, isTyping)}
+            onTyping={(isTyping) =>
+              sendTypingIndicator(chatWindow.id, isTyping)
+            }
             onMarkRead={() => markAsRead(chatWindow.id)}
             isTyping={chatWindow.isTyping}
             typingActorType={chatWindow.typingActorType}

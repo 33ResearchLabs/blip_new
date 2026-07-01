@@ -19,6 +19,7 @@ import { useWebSocketChatContextOptional } from '@/context/WebSocketChatContext'
 import { usePusherOptional } from '@/context/PusherContext';
 import { getOrderChannel } from '@/lib/pusher/channels';
 import { CHAT_EVENTS } from '@/lib/pusher/events';
+import type { ReplyReferenceData } from '@/components/chat/shared';
 import type {
   WSNewMessageEvent,
   WSTypingEvent,
@@ -47,6 +48,9 @@ interface PusherChatMessageEvent {
   createdAt: string;
   clientId?: string | null;
   seq?: number | null;
+  // Migration 177: reply reference forwarded on the message event.
+  replyToId?: string | null;
+  replyTo?: ReplyReferenceData | null;
 }
 
 export interface ChatMessage {
@@ -67,6 +71,9 @@ export interface ChatMessage {
   // Phase 3: idempotency + ordering, optional for backward compat.
   clientId?: string;
   seq?: number;
+  // Migration 177: reply reference.
+  replyToId?: string | null;
+  replyTo?: ReplyReferenceData | null;
 }
 
 export interface PresenceMember {
@@ -112,6 +119,9 @@ interface DbMessage {
   // Phase 3 — present on rows after migration 076
   client_id?: string | null;
   seq?: number | null;
+  // Migration 177 — present on rows after migration 177
+  reply_to_id?: string | null;
+  metadata?: { replyTo?: ReplyReferenceData } | Record<string, unknown> | null;
 }
 
 interface UseWebSocketChatOptions {
@@ -279,6 +289,10 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         status: from === 'me' ? ((dbMsg.status === 'seen' ? 'read' : dbMsg.status as 'sent' | 'delivered') || 'sent') : undefined,
         clientId: dbMsg.client_id ?? undefined,  // Phase 3
         seq: dbMsg.seq ?? undefined,             // Phase 3
+        // Migration 177: reply reference (null on non-reply / legacy rows).
+        replyToId: dbMsg.reply_to_id ?? null,
+        replyTo:
+          (dbMsg.metadata as { replyTo?: ReplyReferenceData } | null | undefined)?.replyTo ?? null,
       };
     },
     []
@@ -309,6 +323,13 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         status: from === 'me' ? 'sent' : undefined,
         clientId: eventWithPhase3.clientId ?? undefined,  // Phase 3
         seq: eventWithPhase3.seq ?? undefined,            // Phase 3
+        // Migration 177: the WS transport doesn't forward reply metadata; the
+        // same message also arrives via Pusher (which does), and dedup-by-id
+        // keeps whichever lands first. Read defensively if the WS server adds it.
+        replyToId:
+          (data as { replyToId?: string | null }).replyToId ?? null,
+        replyTo:
+          (data as { replyTo?: ReplyReferenceData | null }).replyTo ?? null,
       };
     },
     []
@@ -386,6 +407,9 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         status: from === 'me' ? 'sent' : undefined,
         clientId: event.clientId ?? undefined,
         seq: event.seq ?? undefined,
+        // Migration 177: reply reference forwarded on the Pusher event.
+        replyToId: event.replyToId ?? null,
+        replyTo: event.replyTo ?? null,
       };
 
       setChatWindows((prev) =>
@@ -869,7 +893,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
   }, []);
 
   const sendMessage = useCallback(
-    async (chatId: string, text: string, imageUrl?: string, fileData?: { fileUrl: string; fileName: string; fileSize: number; mimeType: string }) => {
+    async (chatId: string, text: string, imageUrl?: string, fileData?: { fileUrl: string; fileName: string; fileSize: number; mimeType: string }, replyTo?: ReplyReferenceData | null) => {
       if (!text.trim() && !imageUrl && !fileData) return;
 
       const window = chatWindowsRef.current.find((w) => w.id === chatId);
@@ -901,6 +925,10 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
         fileSize: fileData?.fileSize,
         mimeType: fileData?.mimeType,
         status: 'sending',
+        // Migration 177: optimistic reply snapshot; the Pusher echo replaces
+        // this temp message (by clientId) with the server-authoritative one.
+        replyToId: replyTo?.id ?? null,
+        replyTo: replyTo ?? null,
       };
 
       setChatWindows((prev) =>
@@ -952,6 +980,7 @@ export function useWebSocketChat(options: UseWebSocketChatOptions = {}) {
             file_size: fileData?.fileSize,
             mime_type: fileData?.mimeType,
             client_id: clientId,
+            reply_to_id: replyTo?.id, // ◄ Migration 177: reply reference
           }),
         });
 

@@ -364,6 +364,9 @@ export const sendMessageSchema = z.object({
   // If present, the backend deduplicates by (sender_id, client_id).
   // Old clients that don't send it continue to work unchanged.
   client_id: z.string().uuid().optional(),
+  // Migration 177: optional reply reference. The backend verifies the target
+  // belongs to the same order and builds the preview snapshot server-side.
+  reply_to_id: z.string().uuid().optional(),
 }).refine(
   (data) => {
     // Text messages require content

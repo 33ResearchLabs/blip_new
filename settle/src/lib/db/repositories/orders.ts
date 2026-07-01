@@ -4,6 +4,7 @@ import {
   OrderWithRelations,
   OrderEvent,
   ChatMessage,
+  ReplyReferenceSnapshot,
   OrderStatus,
   ActorType,
   OfferType,
@@ -2459,6 +2460,7 @@ export async function sendMessage(data: {
   file_size?: number;
   mime_type?: string;
   client_id?: string;  // Phase 3: idempotent send key (UUID, optional)
+  reply_to_id?: string;  // Migration 177: optional reply reference (UUID, optional)
 }): Promise<ChatMessage> {
   const hasClientId = await chatHasClientIdColumn();
 
@@ -2471,7 +2473,7 @@ export async function sendMessage(data: {
        WHERE sender_id = $1 AND client_id = $2`,
       [data.sender_id, data.client_id]
     );
-    if (existing) return existing;
+    if (existing) return enrichWithReply(existing, data);
 
     const result = await queryOne<ChatMessage>(
       `INSERT INTO chat_messages
@@ -2495,7 +2497,7 @@ export async function sendMessage(data: {
         data.client_id,
       ]
     );
-    return result!;
+    return enrichWithReply(result!, data);
   }
 
   // Legacy / pre-migration path — byte-identical to the original sendMessage.
@@ -2534,7 +2536,114 @@ export async function sendMessage(data: {
     });
   }
 
-  return result!;
+  return enrichWithReply(result!, data);
+}
+
+// ─── Migration 177: reply enrichment ────────────────────────────────────────
+//
+// A reply is a normal message that additionally references the message it
+// replies to. We set `reply_to_id` and store a denormalized preview snapshot in
+// `metadata.replyTo` so the reference renders even if the original is paginated
+// out or later soft-deleted. This runs as an awaited post-insert UPDATE so the
+// two carefully-preserved INSERT paths above stay byte-identical, and so the
+// returned message carries reply data before the API route builds its Pusher
+// payload. Fully guarded: a no-op until migration 177 lands.
+
+let _hasReplyToColumn: boolean | null = null;
+
+async function chatHasReplyToColumn(): Promise<boolean> {
+  if (_hasReplyToColumn !== null) return _hasReplyToColumn;
+  try {
+    const rows = await query<{ exists: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'chat_messages' AND column_name = 'reply_to_id'
+       ) AS exists`
+    );
+    _hasReplyToColumn = !!rows[0]?.exists;
+  } catch {
+    _hasReplyToColumn = false;
+  }
+  return _hasReplyToColumn;
+}
+
+function buildReplyPreview(row: {
+  message_type: string | null;
+  content: string | null;
+  image_url: string | null;
+  file_name: string | null;
+}): string {
+  if (row.message_type === 'image' || row.image_url) return 'Photo';
+  if (row.message_type === 'file') return row.file_name || 'File';
+  const text = (row.content || '').replace(/\s+/g, ' ').trim();
+  return text.length > 140 ? `${text.slice(0, 140)}…` : text;
+}
+
+/**
+ * Build the reply snapshot server-side. Returns null if the original is missing
+ * or belongs to a different order (anti-forgery: a client can't reference a
+ * message from another order).
+ */
+async function buildReplySnapshot(
+  orderId: string,
+  replyToId: string
+): Promise<ReplyReferenceSnapshot | null> {
+  const row = await queryOne<{
+    id: string;
+    order_id: string;
+    sender_type: ActorType;
+    message_type: string | null;
+    content: string | null;
+    image_url: string | null;
+    file_name: string | null;
+    sender_name: string | null;
+  }>(
+    `SELECT cm.id, cm.order_id, cm.sender_type, cm.message_type, cm.content,
+            cm.image_url, cm.file_name,
+            CASE
+              WHEN cm.sender_type = 'user' THEN u.username
+              WHEN cm.sender_type = 'merchant' THEN m.display_name
+              WHEN cm.sender_type = 'compliance' THEN ct.name
+              ELSE 'System'
+            END AS sender_name
+       FROM chat_messages cm
+       LEFT JOIN users u ON cm.sender_type = 'user' AND cm.sender_id = u.id
+       LEFT JOIN merchants m ON cm.sender_type = 'merchant' AND cm.sender_id = m.id
+       LEFT JOIN compliance_team ct ON cm.sender_type = 'compliance' AND cm.sender_id = ct.id
+      WHERE cm.id = $1`,
+    [replyToId]
+  );
+  if (!row || row.order_id !== orderId) return null;
+  return {
+    id: row.id,
+    senderType: row.sender_type,
+    senderName: row.sender_name,
+    kind: row.message_type || 'text',
+    preview: buildReplyPreview(row),
+  };
+}
+
+async function enrichWithReply(
+  message: ChatMessage,
+  data: { order_id: string; reply_to_id?: string }
+): Promise<ChatMessage> {
+  if (!data.reply_to_id) return message;
+  if (message.reply_to_id) return message; // already linked (idempotent replay)
+  if (!(await chatHasReplyToColumn())) return message; // migration 177 not applied
+  const snapshot = await buildReplySnapshot(data.order_id, data.reply_to_id);
+  if (!snapshot) return message; // original missing / cross-order → drop link silently
+
+  await query(
+    `UPDATE chat_messages
+        SET reply_to_id = $1,
+            metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
+      WHERE id = $3`,
+    [data.reply_to_id, JSON.stringify({ replyTo: snapshot }), message.id]
+  );
+
+  message.reply_to_id = data.reply_to_id;
+  message.metadata = { ...(message.metadata ?? {}), replyTo: snapshot };
+  return message;
 }
 
 export async function markMessagesAsRead(

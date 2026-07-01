@@ -19,6 +19,7 @@ import {
   useLayoutEffect,
   useRef,
   useCallback,
+  useMemo,
 } from "react";
 import {
   Send,
@@ -31,7 +32,6 @@ import {
   Store,
   Bot,
   Download,
-  ExternalLink,
   FileText,
   File as FileIcon,
   Image as ImageIcon,
@@ -48,10 +48,34 @@ import {
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { compressImage } from "@/lib/utils/compressImage";
 import type { ChatMessage, PresenceMember } from "@/hooks/useRealtimeChat";
+import {
+  ReplyReference,
+  ReplyComposer,
+  SwipeToReply,
+  useJumpToMessage,
+  ImageViewerProvider,
+  useImageViewerOptional,
+  type ReplyReferenceData,
+  type ReplyDraft,
+  type ViewerImage,
+} from "@/components/chat/shared";
+import {
+  usePasteAttachments,
+  AttachmentPreviewList,
+  type ChatAttachment,
+} from "@/components/paste-attachments";
 import { usePusherOptional } from "@/context/PusherContext";
 import { CHAT_EVENTS } from "@/lib/pusher/events";
 import { getOrderChannel } from "@/lib/pusher/channels";
 import { personalizeAppealMessage } from "@/lib/appeals/personalizeMessage";
+import dynamic from "next/dynamic";
+
+// emoji-picker-react is client-only (ssr:false). Rendered with
+// emojiStyle="native" so emojis use the OS font instead of the CDN images
+// the app's CSP img-src blocks (cdn.jsdelivr.net).
+const EmojiPicker = dynamic(() => import("emoji-picker-react"), {
+  ssr: false,
+});
 
 // ============================================
 // Types
@@ -71,6 +95,9 @@ interface ChatRoomProps {
       fileSize: number;
       mimeType: string;
     },
+    // Migration 177: optional reply target. Backward compatible — parents that
+    // don't forward it simply send a normal (non-reply) message.
+    replyTo?: ReplyReferenceData | null,
   ) => void;
   onTyping?: (isTyping: boolean) => void;
   onMarkRead?: () => void;
@@ -106,6 +133,12 @@ interface ChatRoomProps {
   // (e.g. merchant desktop passes "text-white bg-black"), the buyer/seller name
   // renders neutral instead of its role colour. Compliance/system keep theirs.
   counterpartyNameClass?: string;
+  // When false, the counterparty's per-message name label AND avatar are hidden
+  // for a clean 1:1 buyer↔seller view. Set true to reveal them — used when a
+  // compliance officer is involved in the order so the now-3-way conversation
+  // stays attributable. Defaults to true to preserve behaviour on every other
+  // chat surface that doesn't pass it.
+  showCounterpartyIdentity?: boolean;
   // The viewer's trade role (buyer/seller) — used to personalize appeal system
   // messages ("You raised an appeal" instead of "The seller raised an appeal").
   viewerRole?: "buyer" | "seller" | null;
@@ -256,88 +289,30 @@ function ImagePreview({
   imageUrl: string;
   caption?: string;
 }) {
-  const [lightbox, setLightbox] = useState(false);
+  const viewer = useImageViewerOptional();
   const [loading, setLoading] = useState(true);
 
-  const handleDownload = async () => {
-    try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `image-${Date.now()}.jpg`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch {}
+  const openImage = () => {
+    if (viewer) viewer.open(imageUrl);
+    else window.open(imageUrl, "_blank", "noopener");
   };
 
   return (
-    <>
-      <div
-        className="max-w-[220px] rounded-lg overflow-hidden cursor-pointer"
-        onClick={() => setLightbox(true)}
-      >
-        <div className="relative">
-          {loading && (
-            <div className="absolute inset-0 bg-white/5 animate-pulse" />
-          )}
-          <img
-            src={imageUrl}
-            alt="Chat image"
-            className="w-full h-auto max-h-[200px] object-cover"
-            onLoad={() => setLoading(false)}
-          />
-        </div>
-        {caption && (
-          <p className="px-2 py-1 text-xs text-white/80">{caption}</p>
-        )}
+    <div
+      className="max-w-[220px] rounded-lg overflow-hidden cursor-zoom-in"
+      onClick={openImage}
+    >
+      <div className="relative">
+        {loading && <div className="absolute inset-0 bg-white/5 animate-pulse" />}
+        <img
+          src={imageUrl}
+          alt="Chat image"
+          className="w-full h-auto max-h-[200px] object-cover"
+          onLoad={() => setLoading(false)}
+        />
       </div>
-
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
-          onClick={() => setLightbox(false)}
-        >
-          <button
-            onClick={() => setLightbox(false)}
-            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20"
-          >
-            <X className="w-6 h-6 text-white" />
-          </button>
-          <div className="absolute top-4 left-4 flex gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDownload();
-              }}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20"
-              title="Download"
-            >
-              <Download className="w-5 h-5 text-white" />
-            </button>
-            <a
-              href={imageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="p-2 rounded-full bg-white/10 hover:bg-white/20"
-              title="Open"
-            >
-              <ExternalLink className="w-5 h-5 text-white" />
-            </a>
-          </div>
-          <img
-            src={imageUrl}
-            alt="Full size"
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
-      )}
-    </>
+      {caption && <p className="px-2 py-1 text-xs text-white/80">{caption}</p>}
+    </div>
   );
 }
 
@@ -420,9 +395,11 @@ export function ChatRoom({
   orderLabel,
   userAvatarUrl,
   counterpartyNameClass,
+  showCounterpartyIdentity = true,
   viewerRole,
 }: ChatRoomProps) {
   const [messageText, setMessageText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -462,9 +439,19 @@ export function ChatRoom({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Auto-grow the message textarea as the user types: reset to one line, then
+  // expand to fit the content up to a max height (~5 lines), after which it
+  // scrolls. Keeps long messages wrapping instead of scrolling on one line.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, [messageText]);
 
   // ── Optimistic image uploads — WhatsApp-style ──────────────────────
   interface PendingUpload {
@@ -931,12 +918,90 @@ export function ChatRoom({
     };
   }, [pendingFile]);
 
+  // ─── Reply (Migration 177) ─────────────────────────────────────────────
+  const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
+
+  // ─── Paste-to-attach: pasted images ride the existing Cloudinary upload ──
+  const [pasteAtts, setPasteAtts] = useState<ChatAttachment[]>([]);
+  const paste = usePasteAttachments({
+    attachments: pasteAtts,
+    onAttachmentsChange: setPasteAtts,
+    acceptedTypes: ["image/*"],
+    maxFiles: 5,
+    maxFileSize: 10 * 1024 * 1024,
+  });
+
+  // "Jump to original" for a reply reference — scrolls + flashes the target,
+  // paging older messages in if it isn't loaded yet.
+  const { flashId, jumpTo } = useJumpToMessage({
+    loadOlder: onLoadOlder ? async () => (await onLoadOlder()) !== false : undefined,
+  });
+
+  // Can the current actor reply/send right now? Mirrors the input-enable logic.
+  const canReplyNow =
+    currentUserType === "compliance" ? true : !!chatEnabled && !isFrozen && !disabled;
+
+  const buildReplyDraft = (msg: ChatMessage, mine: boolean): ReplyDraft => {
+    const kind =
+      msg.messageType === "image" ? "image" : msg.messageType === "file" ? "file" : "text";
+    const preview =
+      kind === "image"
+        ? "Photo"
+        : kind === "file"
+          ? msg.fileName || "File"
+          : (msg.text || "").slice(0, 140);
+    return {
+      id: msg.id,
+      senderType: msg.senderType || "user",
+      senderName: msg.senderName ?? null,
+      kind,
+      preview,
+      isMe: mine,
+    };
+  };
+
+  const draftToRef = (d: ReplyDraft): ReplyReferenceData => ({
+    id: d.id,
+    senderType: d.senderType,
+    senderName: d.senderName,
+    kind: d.kind,
+    preview: d.preview,
+  });
+
   const handleSend = () => {
     if (pendingFile) {
       uploadAndSend();
-    } else if (messageText.trim()) {
-      onSendMessage(messageText.trim());
+      setReplyDraft(null);
+      return;
+    }
+    // Pasted images: route each through the SAME signed-Cloudinary upload + send
+    // pipeline the paperclip uses (fresh object URL so PasteAttachments' own
+    // cleanup doesn't blank the optimistic upload bubble).
+    if (pasteAtts.length > 0) {
+      const caption = messageText.trim();
+      pasteAtts.forEach((att, i) => {
+        startImageUpload(
+          att.file,
+          URL.createObjectURL(att.file),
+          i === 0 ? caption : "",
+          `temp-paste-${att.id}`,
+        );
+      });
+      setPasteAtts([]);
       setMessageText("");
+      setReplyDraft(null);
+      if (onTyping) onTyping(false);
+      return;
+    }
+    if (messageText.trim()) {
+      onSendMessage(
+        messageText.trim(),
+        undefined,
+        undefined,
+        replyDraft ? draftToRef(replyDraft) : null,
+      );
+      setMessageText("");
+      setReplyDraft(null);
       if (onTyping) onTyping(false);
     }
   };
@@ -978,8 +1043,39 @@ export function ChatRoom({
     }
   };
 
+  // Ordered list of every image in the conversation — feeds the shared viewer's
+  // filmstrip + prev/next navigation.
+  const viewerImages = useMemo<ViewerImage[]>(
+    () =>
+      messages
+        .filter((m) => m.messageType === "image" && m.imageUrl)
+        .map((m) => ({
+          url: m.imageUrl as string,
+          caption: m.text && m.text !== "Photo" ? m.text : undefined,
+          senderName: m.senderName || getRoleName(m.senderType),
+          timestamp: m.timestamp,
+        })),
+    [messages],
+  );
+
   return (
-    <div className="flex flex-col h-full bg-background text-foreground">
+    <ImageViewerProvider images={viewerImages}>
+    <div
+      className="relative flex flex-col h-full bg-background text-foreground"
+      onDrop={paste.onDrop}
+      onDragOver={paste.onDragOver}
+      onDragEnter={paste.onDragEnter}
+      onDragLeave={paste.onDragLeave}
+    >
+      {/* Drag-and-drop overlay — shown while a file is dragged over the chat */}
+      {paste.isDragActive && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-indigo-400/70 bg-black/50 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-2 text-indigo-200">
+            <ImageIcon className="h-8 w-8" />
+            <span className="text-sm font-medium">Drop image to attach</span>
+          </div>
+        </div>
+      )}
       {/* Presence bar removed — online/typing now shown in the chat header */}
 
       {/* Frozen banner */}
@@ -1087,7 +1183,15 @@ export function ChatRoom({
             ROLE_COLORS[msg.senderType || "user"] || ROLE_COLORS.user;
 
           return (
-            <div key={msg.id}>
+            <div
+              key={msg.id}
+              data-message-id={msg.id}
+              className={
+                flashId === msg.id
+                  ? "rounded-lg ring-2 ring-indigo-400/70 transition-shadow"
+                  : "transition-shadow"
+              }
+            >
               {showOrderSeparator && (
                 <div
                   className="flex items-center gap-2 my-3 px-1"
@@ -1106,6 +1210,17 @@ export function ChatRoom({
                   <div className="flex-1 h-px bg-white/[0.06]" />
                 </div>
               )}
+              <SwipeToReply
+                onReply={() => setReplyDraft(buildReplyDraft(msg, isMe))}
+                canReply={
+                  canReplyNow &&
+                  msg.messageType !== "system" &&
+                  // A still-optimistic message has a temp id the server can't
+                  // resolve as a reply target — wait until it's confirmed.
+                  msg.status !== "sending" &&
+                  msg.status !== "failed"
+                }
+              >
               <div
                 className={`flex gap-2 ${
                   isMe ? "flex-row-reverse" : "flex-row"
@@ -1122,7 +1237,7 @@ export function ChatRoom({
                 }`}
               >
                 {/* Avatar */}
-                {!isMe && (
+                {!isMe && showCounterpartyIdentity && (
                   <SenderAvatar
                     senderType={msg.senderType}
                     senderName={displayName}
@@ -1142,7 +1257,7 @@ export function ChatRoom({
                       Only the compliance badge is shown — the Buyer/Seller
                       role is already obvious from the chat context, so the
                       tag is noise for trader-to-trader messages. */}
-                  {!isMe && (
+                  {!isMe && showCounterpartyIdentity && (
                     <div className="flex items-center gap-1.5 mb-0.5 px-1">
                       <span
                         className={`text-[11px] font-medium ${
@@ -1189,6 +1304,14 @@ export function ChatRoom({
                         : "var(--chat-them-text)",
                     }}
                   >
+                    {/* Reply reference (Migration 177) — quoted original above the content */}
+                    {msg.replyTo && (
+                      <ReplyReference
+                        reference={msg.replyTo}
+                        onJump={jumpTo}
+                        className="mb-1.5"
+                      />
+                    )}
                     {/* Image content */}
                     {msg.messageType === "image" && msg.imageUrl && (
                       <ImagePreview
@@ -1268,6 +1391,7 @@ export function ChatRoom({
                     )}
                 </div>
               </div>
+              </SwipeToReply>
             </div>
           );
         })}
@@ -1378,7 +1502,7 @@ export function ChatRoom({
 
       {/* Input area — WhatsApp-style toolbar */}
       <div
-        className="px-3 py-2 border-t border-white/[0.05]"
+        className="relative px-3 py-2 border-t border-white/[0.05]"
         style={{ background: "rgba(14,14,16,0.98)" }}
       >
         {/* Chat-closed banner — replaces the input row entirely when the
@@ -1418,8 +1542,44 @@ export function ChatRoom({
           </div>
         )}
 
+        {replyDraft && (chatEnabled || currentUserType === "compliance") && (
+          <ReplyComposer
+            draft={replyDraft}
+            onCancel={() => setReplyDraft(null)}
+            className="mb-2 w-full"
+          />
+        )}
+        {pasteAtts.length > 0 && (chatEnabled || currentUserType === "compliance") && (
+          <AttachmentPreviewList
+            attachments={pasteAtts}
+            onRemove={paste.removeAttachment}
+          />
+        )}
+        {/* Emoji picker — floats above the toolbar (relatively positioned
+            parent). emojiStyle="native" avoids the CDN images the CSP blocks. */}
+        {showEmojiPicker &&
+          (chatEnabled || currentUserType === "compliance") && (
+            <div className="absolute bottom-full left-0 right-0 mb-2 px-3 z-50">
+              <EmojiPicker
+                onEmojiClick={(emojiData: { emoji: string }) => {
+                  setMessageText((prev) =>
+                    (prev + emojiData.emoji).slice(0, 1000),
+                  );
+                  setShowEmojiPicker(false);
+                  inputRef.current?.focus();
+                }}
+                width="100%"
+                height={320}
+                theme={"dark" as any}
+                emojiStyle={"native" as any}
+                searchDisabled
+                skinTonesDisabled
+                previewConfig={{ showPreview: false }}
+              />
+            </div>
+          )}
         {(chatEnabled || currentUserType === "compliance") && (
-          <div className="flex items-center gap-2 w-full">
+          <div className="flex items-end gap-2 w-full">
             {/* Hidden native file picker — triggered by the paperclip button inside the pill */}
             <input
               ref={fileInputRef}
@@ -1439,16 +1599,33 @@ export function ChatRoom({
               min-w-0 on the flex parent is the critical bit — without it the
               <input> can overflow its flex cell on narrow screens. */}
             <div
-              className="flex-1 min-w-0 flex items-center gap-1 rounded-full pl-4 pr-1.5 transition-colors"
+              className="flex-1 min-w-0 flex items-end gap-1 rounded-3xl pl-1.5 pr-1.5 transition-colors"
               style={{
                 background: "rgba(255,255,255,0.07)",
                 border: "1px solid rgba(255,255,255,0.09)",
               }}
             >
-              {/* Text input — disabled when chat is closed/frozen/waiting */}
-              <input
+              {/* Emoji trigger — sits at the left edge of the pill */}
+              <button
+                onClick={() => setShowEmojiPicker((v) => !v)}
+                disabled={
+                  disabled ||
+                  isUploading ||
+                  !chatEnabled ||
+                  (isFrozen && currentUserType !== "compliance")
+                }
+                className="shrink-0 p-2 rounded-full hover:bg-foreground/[0.06] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Emoji"
+                aria-label="Emoji"
+              >
+                <span className="text-base leading-none">😊</span>
+              </button>
+              {/* Message field — auto-growing textarea so long messages wrap
+                  to the next line instead of scrolling on one line. Enter
+                  sends; Shift+Enter inserts a newline (see handleKeyDown). */}
+              <textarea
                 ref={inputRef}
-                type="text"
+                rows={1}
                 name="chat-message"
                 autoComplete="off"
                 maxLength={1000}
@@ -1457,6 +1634,7 @@ export function ChatRoom({
                   handleTypingChange(e.target.value.slice(0, 1000))
                 }
                 onKeyDown={handleKeyDown}
+                onPaste={paste.onPaste}
                 placeholder={
                   !chatEnabled && chatReason
                     ? chatReason
@@ -1470,7 +1648,7 @@ export function ChatRoom({
                   !chatEnabled ||
                   (isFrozen && currentUserType !== "compliance")
                 }
-                className="flex-1 min-w-0 appearance-none border-0 bg-transparent py-2.5 text-sm text-foreground placeholder:text-foreground/30 outline-none focus-visible:outline-none disabled:opacity-40"
+                className="flex-1 min-w-0 appearance-none border-0 bg-transparent py-2.5 text-sm leading-5 text-foreground placeholder:text-foreground/30 outline-none focus-visible:outline-none disabled:opacity-40 resize-none overflow-y-auto max-h-[120px]"
               />
 
               {/* Attach-file trigger — shrink-0 so it holds its width when text is long */}
@@ -1496,7 +1674,7 @@ export function ChatRoom({
                 disabled ||
                 isUploading ||
                 (isFrozen && currentUserType !== "compliance") ||
-                (!messageText.trim() && !pendingFile)
+                (!messageText.trim() && !pendingFile && pasteAtts.length === 0)
               }
               className="shrink-0 w-10 h-10 flex items-center justify-center rounded-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               style={{ background: "linear-gradient(135deg,#2f6ae0,#1a56c4)" }}
@@ -1511,6 +1689,7 @@ export function ChatRoom({
         )}
       </div>
     </div>
+    </ImageViewerProvider>
   );
 }
 
