@@ -70,6 +70,9 @@ export function EscrowReleaseModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Release escrow"
             className="fixed z-50 w-full max-w-md inset-x-0 bottom-0 mx-auto md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           >
             <div
@@ -100,6 +103,7 @@ export function EscrowReleaseModal({
                 {!isReleasingEscrow && (
                   <button
                     onClick={onClose}
+                    aria-label="Close"
                     className={`p-2 rounded-lg transition-colors ${S.hover}`}
                   >
                     <X className="w-4 h-4 text-text-tertiary" />

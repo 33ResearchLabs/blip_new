@@ -47,6 +47,9 @@ export function EscrowCancelModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Cancel order"
             className="fixed z-50 w-full max-w-md inset-x-0 bottom-0 md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           >
             <div className="bg-card-solid rounded-t-2xl md:rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden pb-safe md:pb-0">
@@ -64,6 +67,7 @@ export function EscrowCancelModal({
                 {!isCancellingEscrow && (
                   <button
                     onClick={onClose}
+                    aria-label="Close"
                     className="p-2 hover:bg-card rounded-lg transition-colors"
                   >
                     <X className="w-4 h-4 text-foreground/35" />

@@ -223,10 +223,14 @@ export function MerchantProfileModal({
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.9, opacity: 0, y: 20 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Merchant profile"
           className="relative w-full max-w-3xl bg-card-solid rounded-2xl border border-white/[0.08] shadow-2xl max-h-[90vh] flex flex-col"
         >
           <button
             onClick={onClose}
+            aria-label="Close"
             className="absolute top-4 right-4 p-2 hover:bg-card rounded-lg transition-colors z-10"
           >
             <X className="w-5 h-5 text-foreground/40" />

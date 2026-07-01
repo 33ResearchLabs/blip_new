@@ -115,13 +115,16 @@ export function MerchantUpiPayModal({ order, open, onClose, onMarkPaid }: Props)
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pay via UPI"
           >
             <div className="mx-auto max-w-[520px] px-5 py-5 pb-[max(env(safe-area-inset-bottom,16px),16px)]">
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-text-tertiary">
                   Pay via UPI
                 </p>
-                <button onClick={onClose} className="p-1.5 rounded-full hover:bg-surface-hover">
+                <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-full hover:bg-surface-hover">
                   <X className="w-4 h-4 text-text-tertiary" />
                 </button>
               </div>

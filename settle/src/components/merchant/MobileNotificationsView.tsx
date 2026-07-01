@@ -75,6 +75,18 @@ function NotifRow({ n, onMarkRead, onSelectOrder, onAction }: NotifRowProps) {
   return (
     <div
       onClick={handleClick}
+      role={isClickable ? "button" : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={
+        isClickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                handleClick();
+              }
+            }
+          : undefined
+      }
       style={{
         display: "flex", gap: 12, alignItems: "flex-start",
         padding: "12px 14px", borderRadius: 16, marginBottom: 4,

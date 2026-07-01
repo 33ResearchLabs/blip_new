@@ -838,6 +838,9 @@ export function PaymentMethodModal({
           initial={isMobile ? false : { scale: 0.95, opacity: 0, y: 10 }}
           animate={isMobile ? undefined : { scale: 1, opacity: 1, y: 0 }}
           exit={isMobile ? undefined : { scale: 0.95, opacity: 0, y: 10 }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Payment methods"
           transition={
             isMobile ? undefined : { type: "spring", damping: 25, stiffness: 300 }
           }

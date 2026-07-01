@@ -17,6 +17,7 @@ import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { showAlert } from '@/context/ModalContext';
 import { notifyError, notifyApiError } from '@/lib/notify/notifyError';
 import { clampDecimal, DECIMAL_PRESETS } from '@/lib/input/sanitize';
+import { useDesktopAutoFocus } from '@/hooks/useDesktopAutoFocus';
 
 export interface CorridorFormState {
   fromCurrency: string;
@@ -54,6 +55,9 @@ export function CorridorCreateModal({
   // In-flight guard: keeps the submit button disabled + spinning while the POST
   // is running so a double-tap can't create two live corridor offers.
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Desktop-only autofocus on the first field so the merchant can start typing
+  // the amount immediately (no keyboard-pop on touch devices).
+  const amountRef = useDesktopAutoFocus<HTMLInputElement>(isOpen);
 
   // Esc closes the modal (same as the Cancel/✕ buttons) — keyboard parity.
   useEffect(() => {
@@ -80,6 +84,9 @@ export function CorridorCreateModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Open corridor"
             className="fixed z-50 w-full max-w-md inset-x-0 bottom-0 md:inset-auto md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           >
             <div className="bg-card-solid rounded-t-2xl md:rounded-2xl border border-white/[0.08] shadow-2xl overflow-hidden pb-safe md:pb-0">
@@ -96,6 +103,7 @@ export function CorridorCreateModal({
                 </div>
                 <button
                   onClick={onClose}
+                  aria-label="Close"
                   className="p-2 hover:bg-card rounded-lg transition-colors"
                 >
                   <X className="w-4 h-4 text-foreground/35" />
@@ -159,6 +167,7 @@ export function CorridorCreateModal({
                   <label className="text-[11px] text-foreground/35 uppercase tracking-wide mb-2 block">Amount to Offer (USDT)</label>
                   <div className="relative">
                     <input
+                      ref={amountRef}
                       type="text"
                       inputMode="decimal"
                       maxLength={14}

@@ -27,6 +27,9 @@ export function AnalyticsModal({ show, merchantId, onClose }: AnalyticsModalProp
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Analytics"
             className="bg-card-solid rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-white/[0.08] shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -34,6 +37,7 @@ export function AnalyticsModal({ show, merchantId, onClose }: AnalyticsModalProp
               <h2 className="text-lg font-semibold text-white">Analytics</h2>
               <button
                 onClick={onClose}
+                aria-label="Close"
                 className="p-2 hover:bg-card rounded-lg transition-colors"
               >
                 <X className="w-5 h-5 text-foreground/35" />

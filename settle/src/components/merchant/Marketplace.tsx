@@ -210,6 +210,7 @@ export function Marketplace({ merchantId, onTakeOffer }: MarketplaceProps) {
         <button
           onClick={fetchOffers}
           disabled={isLoading}
+          aria-label="Refresh offers"
           className="p-2 hover:bg-card rounded-lg transition-colors"
         >
           <RefreshCw className={`w-4 h-4 text-foreground/40 ${isLoading ? "animate-spin" : ""}`} />
