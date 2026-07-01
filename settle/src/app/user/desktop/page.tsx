@@ -54,6 +54,7 @@ import {
   LimitsScreen,
   StakeScreen,
   PointsScreen,
+  ResolvedDisputesScreen,
 } from "@/components/user/screens";
 
 import { DesktopSidebar } from "@/components/user/desktop/DesktopSidebar";
@@ -746,6 +747,12 @@ export default function UserDesktopPage() {
           {screen === "stake" && (
             <CenterPanel k="stake">
               <StakeScreen setScreen={setScreen} />
+            </CenterPanel>
+          )}
+
+          {screen === "disputes" && (
+            <CenterPanel k="disputes">
+              <ResolvedDisputesScreen setScreen={setScreen} resolvedDisputes={resolvedDisputes} />
             </CenterPanel>
           )}
 

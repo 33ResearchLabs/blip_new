@@ -114,6 +114,7 @@ import {
   LimitsScreen,
   StakeScreen,
   PointsScreen,
+  ResolvedDisputesScreen,
 } from "@/components/user/screens";
 import { SendScreen } from "@/components/user/screens/SendScreen";
 import { ReputationScreen } from "@/components/user/screens/ReputationScreen";
@@ -1193,6 +1194,17 @@ export default function Home() {
             desktop={!!isDesktop}
           >
             <PointsScreen setScreen={setScreen} />
+          </Panel>
+        )}
+
+        {screen === "disputes" && (
+          <Panel
+            k="disputes"
+            anim={slide}
+            style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
+          >
+            <ResolvedDisputesScreen setScreen={setScreen} resolvedDisputes={resolvedDisputes} />
           </Panel>
         )}
 
