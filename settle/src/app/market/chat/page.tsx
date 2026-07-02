@@ -35,6 +35,9 @@ import {
   type ComponentProps,
 } from "react";
 import { useRouter } from "next/navigation";
+import { MerchantSupportPanel } from "@/components/merchant/MerchantSupportPanel";
+// inside TradeDetailsPane:
+
 import {
   Search,
   SlidersHorizontal,
@@ -59,6 +62,7 @@ import {
   LifeBuoy,
   CircleDollarSign,
   Flag,
+  X,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { openIssueReporter } from "@/components/IssueReporter";
@@ -76,7 +80,13 @@ import { ReceiptCard } from "@/components/chat/cards";
 import {
   ImageViewerProvider,
   useImageViewerOptional,
+  SwipeToReply,
+  ReplyReference,
+  ReplyComposer,
+  useJumpToMessage,
   type ViewerImage,
+  type ReplyReferenceData,
+  type ReplyDraft,
 } from "@/components/chat/shared";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import { orderActionKey } from "@/lib/api/idempotencyKeys";
@@ -129,7 +139,12 @@ function statusLabel(s: string) {
 }
 
 function initials(name: string) {
-  return name.replace(/[^a-zA-Z]/g, "").slice(0, 2).toUpperCase() || "??";
+  return (
+    name
+      .replace(/[^a-zA-Z]/g, "")
+      .slice(0, 2)
+      .toUpperCase() || "??"
+  );
 }
 
 /** Neutral avatar tint (theme-aware, derived from name for stable variety). */
@@ -139,7 +154,20 @@ function avatarTint(name: string) {
   return { backgroundColor: `rgba(255,255,255,${a})` };
 }
 
-const EMOJIS = ["🦊", "🐻", "🐼", "🐨", "🦁", "🐯", "🐸", "🐙", "🦋", "🐳", "🦄", "🐲"];
+const EMOJIS = [
+  "🦊",
+  "🐻",
+  "🐼",
+  "🐨",
+  "🦁",
+  "🐯",
+  "🐸",
+  "🐙",
+  "🦋",
+  "🐳",
+  "🦄",
+  "🐲",
+];
 function userEmoji(name: string) {
   const hash = name.split("").reduce((a, b) => a + b.charCodeAt(0), 0);
   return EMOJIS[hash % EMOJIS.length];
@@ -205,7 +233,11 @@ function dayLabel(d: Date) {
   const yest = new Date(now);
   yest.setDate(now.getDate() - 1);
   if (d.toDateString() === yest.toDateString()) return "Yesterday";
-  return d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function fiatSymbol(ccy?: string) {
@@ -232,7 +264,11 @@ function progressFraction(status?: string) {
 /* Actions that require the embedded-wallet / on-chain escrow signing flow.
    LOCK_ESCROW now runs in-chat via the escrow modal; ACCEPT / CLAIM still
    route to the dashboard (handled in handleAction). */
-const WALLET_FLOW_ACTIONS = new Set<ActionType>(["ACCEPT", "LOCK_ESCROW", "CLAIM"]);
+const WALLET_FLOW_ACTIONS = new Set<ActionType>([
+  "ACCEPT",
+  "LOCK_ESCROW",
+  "CLAIM",
+]);
 
 /* Wallet-flow actions that still bounce the merchant to the dashboard (i.e.
    everything except LOCK_ESCROW, which we now handle in the chat tab). Drives
@@ -352,7 +388,9 @@ export default function TradeChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderConversations, merchantId]);
 
-  const activeWindow = chat.chatWindows.find((w) => w.orderId === activeOrderId);
+  const activeWindow = chat.chatWindows.find(
+    (w) => w.orderId === activeOrderId,
+  );
 
   // Ordered list of every image in the open conversation — feeds the shared
   // Telegram-style viewer's filmstrip + prev/next navigation.
@@ -447,7 +485,9 @@ export default function TradeChatPage() {
   // balance, live mode reads on-chain USDT. The modal shows it; executeLockEscrow
   // re-checks the real on-chain balance before signing.
   const inAppBalance = MOCK_MODE ? 10000 : null;
-  const effectiveBalance = MOCK_MODE ? inAppBalance : (solanaWallet?.usdtBalance ?? null);
+  const effectiveBalance = MOCK_MODE
+    ? inAppBalance
+    : solanaWallet?.usdtBalance ?? null;
   const {
     showEscrowModal,
     escrowOrder,
@@ -560,14 +600,27 @@ export default function TradeChatPage() {
         message: labels[type] ?? `Run ${type}?`,
       });
     },
-    [activeOrderId, dispatch, router, order, solanaWallet, openEscrowModal, openReleaseModal, merchantId, merchantInfo],
+    [
+      activeOrderId,
+      dispatch,
+      router,
+      order,
+      solanaWallet,
+      openEscrowModal,
+      openReleaseModal,
+      merchantId,
+      merchantInfo,
+    ],
   );
 
   // Confirm the reason modal → dispatch the cancel/dispute with the typed reason.
   const confirmReasonAction = useCallback(async () => {
     if (!reasonModal || !activeOrderId) return;
     const { type, reason } = reasonModal;
-    const fallback = type === "CANCEL" ? "Cancelled by merchant" : "Dispute raised by merchant";
+    const fallback =
+      type === "CANCEL"
+        ? "Cancelled by merchant"
+        : "Dispute raised by merchant";
     setReasonModal(null);
     setActionMsg(null);
     await dispatch(activeOrderId, type, { reason: reason.trim() || fallback });
@@ -591,20 +644,32 @@ export default function TradeChatPage() {
       setRespondingCancel(true);
       setActionMsg(null);
       try {
-        const res = await fetchWithAuth(`/api/orders/${activeOrderId}/cancel-request`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": orderActionKey(activeOrderId, "cancel_respond"),
+        const res = await fetchWithAuth(
+          `/api/orders/${activeOrderId}/cancel-request`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              "Idempotency-Key": orderActionKey(
+                activeOrderId,
+                "cancel_respond",
+              ),
+            },
+            body: JSON.stringify({
+              actor_type: "merchant",
+              actor_id: merchantId,
+              accept,
+            }),
           },
-          body: JSON.stringify({ actor_type: "merchant", actor_id: merchantId, accept }),
-        });
+        );
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.success) {
           loadOrder(activeOrderId);
           fetchOrderConversations();
         } else {
-          setActionMsg(data.error || "Failed to respond to the cancellation request");
+          setActionMsg(
+            data.error || "Failed to respond to the cancellation request",
+          );
         }
       } catch {
         setActionMsg("Failed to respond to the cancellation request");
@@ -612,16 +677,61 @@ export default function TradeChatPage() {
         setRespondingCancel(false);
       }
     },
-    [activeOrderId, merchantId, respondingCancel, loadOrder, fetchOrderConversations],
+    [
+      activeOrderId,
+      merchantId,
+      respondingCancel,
+      loadOrder,
+      fetchOrderConversations,
+    ],
+  );
+
+  // ── Reply (Migration 177) ──
+  const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
+  const { flashId, jumpTo } = useJumpToMessage();
+  const buildReplyDraft = useCallback((m: ChatMessage): ReplyDraft => {
+    const kind =
+      m.messageType === "image" || m.imageUrl
+        ? "image"
+        : m.messageType === "file" || m.fileUrl
+          ? "file"
+          : "text";
+    const preview =
+      kind === "image" ? "Photo" : kind === "file" ? m.fileName || "File" : (m.text || "").slice(0, 140);
+    return {
+      id: m.id,
+      senderType: m.senderType ?? "merchant",
+      senderName: m.senderName ?? null,
+      kind,
+      preview,
+      isMe: m.from === "me",
+    };
+  }, []);
+  const draftToRef = useCallback(
+    (d: ReplyDraft): ReplyReferenceData => ({
+      id: d.id,
+      senderType: d.senderType,
+      senderName: d.senderName,
+      kind: d.kind,
+      preview: d.preview,
+    }),
+    [],
   );
 
   // ── send a message (text + optional image) ──
   const send = useCallback(() => {
     const body = draft.trim();
     if (!body || !activeWindow) return;
-    chat.sendMessage(activeWindow.id, body);
+    chat.sendMessage(
+      activeWindow.id,
+      body,
+      undefined,
+      undefined,
+      replyDraft ? draftToRef(replyDraft) : null,
+    );
     setDraft("");
-  }, [draft, activeWindow, chat]);
+    setReplyDraft(null);
+  }, [draft, activeWindow, chat, replyDraft, draftToRef]);
 
   const sendImage = useCallback(
     (imageUrl: string) => {
@@ -641,7 +751,8 @@ export default function TradeChatPage() {
   const cancelReqById = order?.cancel_requested_by_id ?? null;
   const cancelReqReason = order?.cancel_request_reason ?? null;
   const iRequestedCancel =
-    !!cancelReqBy && (cancelReqById ? cancelReqById === merchantId : cancelReqBy === "merchant");
+    !!cancelReqBy &&
+    (cancelReqById ? cancelReqById === merchantId : cancelReqBy === "merchant");
   const incomingCancel = !!cancelReqBy && !iRequestedCancel;
 
   return (
@@ -726,10 +837,10 @@ export default function TradeChatPage() {
                   tab === "unread"
                     ? "No unread conversations."
                     : tab === "active"
-                      ? "No active trades right now."
-                      : search
-                        ? "No matches."
-                        : "No trade conversations yet."
+                    ? "No active trades right now."
+                    : search
+                    ? "No matches."
+                    : "No trade conversations yet."
                 }
               />
             ) : (
@@ -771,8 +882,8 @@ export default function TradeChatPage() {
                     {activeWindow?.isTyping
                       ? "typing…"
                       : isCounterpartyOnline(activeWindow, merchantId)
-                        ? "Online"
-                        : "Offline"}
+                      ? "Online"
+                      : "Offline"}
                   </p>
                 </div>
                 <button
@@ -792,32 +903,58 @@ export default function TradeChatPage() {
               />
 
               {/* messages */}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto pulse-scroll px-4 py-4 space-y-3">
+              <div
+                ref={scrollRef}
+                className="flex-1 overflow-y-auto pulse-scroll px-4 py-4 space-y-3"
+              >
                 {/* E2E banner */}
                 <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.06] text-[11px] text-foreground/45 text-center max-w-xl mx-auto">
                   <Lock className="w-3 h-3 shrink-0" />
-                  Never share personal info or payment details outside Blip Market. All chats are end-to-end encrypted.
+                  Never share personal info or payment details outside Blip
+                  Market. All chats are end-to-end encrypted.
                 </div>
 
-                {activeOrderId && chat.hasOlderMessages(activeOrderId) && activeWindow?.messages.length ? (
+                {activeOrderId &&
+                chat.hasOlderMessages(activeOrderId) &&
+                activeWindow?.messages.length ? (
                   <div className="flex justify-center">
                     <button
                       onClick={() => chat.loadOlderMessages(activeOrderId)}
                       disabled={chat.isLoadingOlderMessages(activeOrderId)}
                       className="text-[11px] text-foreground/50 hover:text-accent px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] transition-colors"
                     >
-                      {chat.isLoadingOlderMessages(activeOrderId) ? "Loading…" : "Load earlier messages"}
+                      {chat.isLoadingOlderMessages(activeOrderId)
+                        ? "Loading…"
+                        : "Load earlier messages"}
                     </button>
                   </div>
                 ) : null}
 
                 {!activeWindow || activeWindow.messages.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-foreground/40 text-sm">
-                    {activeWindow ? "No messages yet — say hello." : <Loader2 className="w-5 h-5 animate-spin" />}
+                    {activeWindow ? (
+                      "No messages yet — say hello."
+                    ) : (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    )}
                   </div>
                 ) : (
                   <ImageViewerProvider images={chatViewerImages}>
-                    <MessageStream messages={activeWindow.messages} status={order?.status ?? activeConvo.order_status} viewerRole={order?.my_role === "buyer" || order?.my_role === "seller" ? order.my_role : null} onRetry={(id) => chat.retryMessage(activeWindow.id, id)} />
+                    <MessageStream
+                      messages={activeWindow.messages}
+                      status={order?.status ?? activeConvo.order_status}
+                      viewerRole={
+                        order?.my_role === "buyer" ||
+                        order?.my_role === "seller"
+                          ? order.my_role
+                          : null
+                      }
+                      onRetry={(id) => chat.retryMessage(activeWindow.id, id)}
+                      onReply={(m) => setReplyDraft(buildReplyDraft(m))}
+                      onJump={jumpTo}
+                      canReply={!chatClosed}
+                      flashId={flashId}
+                    />
                   </ImageViewerProvider>
                 )}
               </div>
@@ -831,7 +968,8 @@ export default function TradeChatPage() {
                         Cancel &amp; refund requested
                       </p>
                       <p className="text-[11px] text-foreground/55 leading-snug truncate">
-                        {cancelReqReason || "Agree to cancel this order and refund the escrow."}
+                        {cancelReqReason ||
+                          "Agree to cancel this order and refund the escrow."}
                       </p>
                     </div>
                     <div className="flex gap-2 shrink-0">
@@ -840,7 +978,11 @@ export default function TradeChatPage() {
                         disabled={respondingCancel}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-accent-text text-[12.5px] font-semibold disabled:opacity-50"
                       >
-                        {respondingCancel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        {respondingCancel ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5" />
+                        )}
                         Agree
                       </button>
                       <button
@@ -857,9 +999,17 @@ export default function TradeChatPage() {
 
               {/* composer */}
               <div className="shrink-0 border-t border-white/[0.06] p-3">
+                {!chatClosed && replyDraft && (
+                  <ReplyComposer
+                    draft={replyDraft}
+                    onCancel={() => setReplyDraft(null)}
+                    className="mb-2"
+                  />
+                )}
                 {chatClosed ? (
                   <p className="text-center text-[11px] text-foreground/40 py-2">
-                    This trade is {statusLabel(order?.status ?? "")} — chat is closed.
+                    This trade is {statusLabel(order?.status ?? "")} — chat is
+                    closed.
                   </p>
                 ) : (
                   <div className="flex items-end gap-1.5">
@@ -888,7 +1038,11 @@ export default function TradeChatPage() {
                       value={draft}
                       onChange={(e) => {
                         setDraft(e.target.value);
-                        if (activeWindow) chat.sendTypingIndicator(activeWindow.id, e.target.value.length > 0);
+                        if (activeWindow)
+                          chat.sendTypingIndicator(
+                            activeWindow.id,
+                            e.target.value.length > 0,
+                          );
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
@@ -952,7 +1106,9 @@ export default function TradeChatPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-[16px] font-semibold text-foreground">
-              {reasonModal.type === "CANCEL" ? "Cancel order" : "Open a dispute"}
+              {reasonModal.type === "CANCEL"
+                ? "Cancel order"
+                : "Open a dispute"}
             </h3>
             <p className="text-[13px] text-foreground/55 mt-1.5 leading-snug">
               {reasonModal.type === "CANCEL"
@@ -962,12 +1118,16 @@ export default function TradeChatPage() {
             <input
               autoFocus
               value={reasonModal.reason}
-              onChange={(e) => setReasonModal({ ...reasonModal, reason: e.target.value })}
+              onChange={(e) =>
+                setReasonModal({ ...reasonModal, reason: e.target.value })
+              }
               onKeyDown={(e) => {
                 if (e.key === "Enter") confirmReasonAction();
               }}
               placeholder={
-                reasonModal.type === "CANCEL" ? "Reason for cancelling…" : "Describe the issue…"
+                reasonModal.type === "CANCEL"
+                  ? "Reason for cancelling…"
+                  : "Describe the issue…"
               }
               maxLength={200}
               className="mt-3 w-full rounded-xl px-3.5 py-2.5 text-[14px] text-foreground bg-white/[0.04] border border-white/[0.12] outline-none placeholder:text-foreground/35"
@@ -984,7 +1144,9 @@ export default function TradeChatPage() {
                 disabled={actionLoading}
                 className="flex-1 py-2.5 rounded-xl bg-accent text-accent-text text-[14px] font-semibold disabled:opacity-50"
               >
-                {reasonModal.type === "CANCEL" ? "Request cancellation" : "Open dispute"}
+                {reasonModal.type === "CANCEL"
+                  ? "Request cancellation"
+                  : "Open dispute"}
               </button>
             </div>
           </div>
@@ -1002,7 +1164,9 @@ export default function TradeChatPage() {
             className="w-full max-w-[380px] rounded-2xl bg-[var(--color-bg-secondary)] border border-white/[0.1] p-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-[16px] font-semibold text-foreground">Confirm</h3>
+            <h3 className="text-[16px] font-semibold text-foreground">
+              Confirm
+            </h3>
             <p className="text-[13px] text-foreground/55 mt-1.5 leading-snug">
               {confirmModal.message}
             </p>
@@ -1090,29 +1254,46 @@ function TradeSummaryStrip({
   const ccy = order?.fiat_currency ?? convo.fiat_currency;
   const rate = order?.rate;
   // Perspective from the merchant's resolved role (backend-driven).
-  const verb = order?.my_role === "buyer" ? "buying" : order?.my_role === "seller" ? "selling" : "trading";
+  const verb =
+    order?.my_role === "buyer"
+      ? "buying"
+      : order?.my_role === "seller"
+      ? "selling"
+      : "trading";
   const pct = progressFraction(status);
 
   return (
     <div className="shrink-0 border-b border-white/[0.06] bg-[var(--color-bg-secondary)]/60 px-4 py-2.5">
       <div className="flex items-center gap-4 flex-wrap">
         <div className="min-w-0">
-          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">You are {verb}</p>
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">
+            You are {verb}
+          </p>
           <p className="text-sm font-semibold text-foreground leading-tight">
-            {formatCrypto(crypto)} <span className="text-foreground/50 text-xs font-medium">USDT</span>
+            {formatCrypto(crypto)}{" "}
+            <span className="text-foreground/50 text-xs font-medium">USDT</span>
           </p>
           {rate != null && (
-            <p className="text-[10px] text-foreground/45">Price: {fiatSymbol(ccy)}{formatRate(rate)}</p>
+            <p className="text-[10px] text-foreground/45">
+              Price: {fiatSymbol(ccy)}
+              {formatRate(rate)}
+            </p>
           )}
         </div>
 
         <div className="min-w-0">
-          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Total Amount</p>
-          <p className="text-sm font-semibold text-foreground leading-tight">{formatFiat(fiat, ccy)}</p>
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">
+            Total Amount
+          </p>
+          <p className="text-sm font-semibold text-foreground leading-tight">
+            {formatFiat(fiat, ccy)}
+          </p>
         </div>
 
         <div className="min-w-0 ml-auto">
-          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Status</p>
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">
+            Status
+          </p>
           <p className="text-xs font-semibold text-warning">
             {order?.statusLabel ?? statusLabel(status)}
           </p>
@@ -1135,16 +1316,25 @@ function MessageStream({
   status,
   viewerRole,
   onRetry,
+  onReply,
+  onJump,
+  canReply,
+  flashId,
 }: {
   messages: ChatMessage[];
   status: string;
   viewerRole?: "buyer" | "seller" | null;
   onRetry?: (messageId: string) => void;
+  onReply: (m: ChatMessage) => void;
+  onJump: (id: string) => void;
+  canReply: boolean;
+  flashId: string | null;
 }) {
   const out: ReactNode[] = [];
   let lastDay = "";
   for (const m of messages) {
-    const ts = m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp);
+    const ts =
+      m.timestamp instanceof Date ? m.timestamp : new Date(m.timestamp);
     const day = ts.toDateString();
     if (day !== lastDay) {
       lastDay = day;
@@ -1156,7 +1346,19 @@ function MessageStream({
         </div>,
       );
     }
-    out.push(<MessageItem key={m.id} m={m} status={status} viewerRole={viewerRole} onRetry={onRetry} />);
+    out.push(
+      <MessageItem
+        key={m.id}
+        m={m}
+        status={status}
+        viewerRole={viewerRole}
+        onRetry={onRetry}
+        onReply={onReply}
+        onJump={onJump}
+        canReply={canReply}
+        flashId={flashId}
+      />,
+    );
   }
   return <>{out}</>;
 }
@@ -1166,11 +1368,19 @@ function MessageItem({
   status,
   viewerRole,
   onRetry,
+  onReply,
+  onJump,
+  canReply,
+  flashId,
 }: {
   m: ChatMessage;
   status: string;
   viewerRole?: "buyer" | "seller" | null;
   onRetry?: (messageId: string) => void;
+  onReply: (m: ChatMessage) => void;
+  onJump: (id: string) => void;
+  canReply: boolean;
+  flashId: string | null;
 }) {
   const viewer = useImageViewerOptional();
   // Rich receipt cards (Payment Sent / Trade Completed) when the message
@@ -1180,7 +1390,11 @@ function MessageItem({
       <div className="flex justify-center">
         <div className="max-w-sm w-full">
           <ReceiptCard
-            data={m.receiptData as unknown as ComponentProps<typeof ReceiptCard>["data"]}
+            data={
+              m.receiptData as unknown as ComponentProps<
+                typeof ReceiptCard
+              >["data"]
+            }
             currentStatus={status}
             theme="dark"
           />
@@ -1194,7 +1408,9 @@ function MessageItem({
     return (
       <div className="flex justify-center">
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-[10px] text-foreground/50 max-w-[80%] text-center">
-          {m.from === "compliance" && <span className="text-accent font-semibold">Compliance:</span>}
+          {m.from === "compliance" && (
+            <span className="text-accent font-semibold">Compliance:</span>
+          )}
           {personalizeAppealMessage(m.text, viewerRole)}
         </span>
       </div>
@@ -1203,21 +1419,35 @@ function MessageItem({
 
   const mine = m.from === "me";
   return (
-    <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${
-          mine
-            ? "bg-accent text-accent-text rounded-br-md"
-            : "bg-white/[0.05] text-foreground border border-white/[0.06] rounded-bl-md"
-        }`}
+    <div
+      data-message-id={m.id}
+      className={`flex ${mine ? "justify-end" : "justify-start"} ${
+        flashId === m.id ? "rounded-lg ring-2 ring-accent/70" : ""
+      }`}
+    >
+      <SwipeToReply
+        onReply={() => onReply(m)}
+        canReply={canReply && m.status !== "sending" && m.status !== "failed"}
       >
+        <div
+          className={`max-w-[75%] rounded-2xl px-3.5 py-2 ${
+            mine
+              ? "bg-accent text-accent-text rounded-br-md"
+              : "bg-white/[0.05] text-foreground border border-white/[0.06] rounded-bl-md"
+          }`}
+        >
+        {m.replyTo && (
+          <ReplyReference reference={m.replyTo} onJump={onJump} className="mb-1.5" />
+        )}
         {m.imageUrl && (
           <img
             src={m.imageUrl}
             alt=""
             className="rounded-lg mb-1 max-h-48 object-cover cursor-zoom-in"
             onClick={() =>
-              viewer ? viewer.open(m.imageUrl!) : window.open(m.imageUrl!, "_blank", "noopener")
+              viewer
+                ? viewer.open(m.imageUrl!)
+                : window.open(m.imageUrl!, "_blank", "noopener")
             }
           />
         )}
@@ -1226,18 +1456,28 @@ function MessageItem({
             href={m.fileUrl}
             target="_blank"
             rel="noreferrer"
-            className={`flex items-center gap-1.5 text-xs underline ${mine ? "text-accent-text/80" : "text-accent"}`}
+            className={`flex items-center gap-1.5 text-xs underline ${
+              mine ? "text-accent-text/80" : "text-accent"
+            }`}
           >
             <ExternalLink className="w-3 h-3" />
             {m.fileName ?? "Attachment"}
           </a>
         )}
-        {m.text && <p className="text-sm leading-snug whitespace-pre-wrap break-words">{m.text}</p>}
+        {m.text && (
+          <p className="text-sm leading-snug whitespace-pre-wrap break-words">
+            {m.text}
+          </p>
+        )}
         <div
-          className={`flex items-center gap-1 justify-end mt-0.5 ${mine ? "text-accent-text/50" : "text-foreground/40"}`}
+          className={`flex items-center gap-1 justify-end mt-0.5 ${
+            mine ? "text-accent-text/50" : "text-foreground/40"
+          }`}
         >
           <span className="text-[9px]">
-            {m.timestamp instanceof Date ? clock(m.timestamp) : clock(new Date(m.timestamp))}
+            {m.timestamp instanceof Date
+              ? clock(m.timestamp)
+              : clock(new Date(m.timestamp))}
           </span>
           {mine &&
             (m.status === "read" ? (
@@ -1262,6 +1502,7 @@ function MessageItem({
             ))}
         </div>
       </div>
+      </SwipeToReply>
     </div>
   );
 }
@@ -1290,7 +1531,11 @@ function EmptyCenter({ signedOut }: { signedOut: boolean }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-foreground/40 gap-3">
       <MessagesSquare className="w-10 h-10 opacity-40" />
-      <p className="text-sm">{signedOut ? "Sign in to view trade chats." : "Select a trade to start chatting."}</p>
+      <p className="text-sm">
+        {signedOut
+          ? "Sign in to view trade chats."
+          : "Select a trade to start chatting."}
+      </p>
     </div>
   );
 }
@@ -1307,7 +1552,9 @@ function ConversationRow({
   const isActiveTrade = ACTIVE_STATUSES.has(c.order_status);
   const preview =
     c.last_message?.content ??
-    `${fiatSymbol(c.fiat_currency)}${formatCrypto(c.fiat_amount)} · ${formatCrypto(c.crypto_amount)} USDT`;
+    `${fiatSymbol(c.fiat_currency)}${formatCrypto(
+      c.fiat_amount,
+    )} · ${formatCrypto(c.crypto_amount)} USDT`;
 
   return (
     <button
@@ -1327,15 +1574,21 @@ function ConversationRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <span className="flex items-center gap-1 min-w-0">
-            <span className="text-sm font-medium text-foreground truncate">{c.user.username}</span>
+            <span className="text-sm font-medium text-foreground truncate">
+              {c.user.username}
+            </span>
             {(c.user.total_trades ?? 0) >= 100 && (
               <Crown className="w-3 h-3 text-warning shrink-0" />
             )}
           </span>
-          <span className="text-[10px] text-foreground/40 shrink-0">{rowTime(c.last_activity)}</span>
+          <span className="text-[10px] text-foreground/40 shrink-0">
+            {rowTime(c.last_activity)}
+          </span>
         </div>
         <div className="flex items-center gap-1.5">
-          {isActiveTrade && <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />}
+          {isActiveTrade && (
+            <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+          )}
           <span className="text-[11px] text-foreground/45 shrink-0">
             {isActiveTrade ? "Active trade" : statusLabel(c.order_status)}
           </span>
@@ -1405,6 +1658,7 @@ function TradeDetailsPane({
   const { appeal, refetch: refetchAppeal } = useOrderAppeal(appealOrderId, {
     enabled: !!appealOrderId,
   });
+  const [showSupport, setShowSupport] = useState(false);
   const appealActive = isActiveAppeal(appeal);
   const showAppeal =
     ["accepted", "escrowed", "payment_sent"].includes(status) && !appealActive;
@@ -1449,7 +1703,9 @@ function TradeDetailsPane({
       <div className="h-14 shrink-0 flex items-center justify-between px-4 border-b border-white/[0.06]">
         <h2 className="text-sm font-semibold text-foreground">Trade Details</h2>
         <div className="flex items-center gap-1">
-          {loading && <Loader2 className="w-3.5 h-3.5 text-foreground/40 animate-spin" />}
+          {loading && (
+            <Loader2 className="w-3.5 h-3.5 text-foreground/40 animate-spin" />
+          )}
           <button
             onClick={onClose}
             className="lg:hidden p-1.5 text-foreground/50 hover:text-foreground hover:bg-white/[0.08] rounded-lg transition-all"
@@ -1464,10 +1720,14 @@ function TradeDetailsPane({
         {/* active order */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Active Order</p>
+            <p className="text-[10px] text-foreground/45 uppercase tracking-wider">
+              Active Order
+            </p>
             <span
               className={`px-2 py-0.5 rounded-full text-[10px] font-medium uppercase tracking-wide ${
-                type === "buy" ? "bg-success/15 text-success" : "bg-error/15 text-error"
+                type === "buy"
+                  ? "bg-success/15 text-success"
+                  : "bg-error/15 text-error"
               }`}
             >
               {type}
@@ -1475,18 +1735,33 @@ function TradeDetailsPane({
           </div>
           <div className="bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl divide-y divide-white/[0.05]">
             <DetailRow label="Amount" value={`${formatCrypto(crypto)} USDT`} />
-            {rate != null && <DetailRow label="Price" value={`${fiatSymbol(ccy)}${formatRate(rate)}`} />}
+            {rate != null && (
+              <DetailRow
+                label="Price"
+                value={`${fiatSymbol(ccy)}${formatRate(rate)}`}
+              />
+            )}
             <DetailRow label="Total" value={formatFiat(fiat, ccy)} />
-            <DetailRow label="Order ID" value={order?.order_number ?? convo.order_number} mono />
+            <DetailRow
+              label="Order ID"
+              value={order?.order_number ?? convo.order_number}
+              mono
+            />
             <div className="flex items-center justify-between px-3 py-2.5">
               <span className="text-[11px] text-foreground/50">Status</span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${STATUS_PILL[status] ?? STATUS_PILL.pending}`}>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                  STATUS_PILL[status] ?? STATUS_PILL.pending
+                }`}
+              >
                 {order?.statusLabel ?? statusLabel(status)}
               </span>
             </div>
           </div>
           {order?.nextStepText && (
-            <p className="text-[11px] text-foreground/45 leading-snug px-1 mt-2">{order.nextStepText}</p>
+            <p className="text-[11px] text-foreground/45 leading-snug px-1 mt-2">
+              {order.nextStepText}
+            </p>
           )}
         </div>
 
@@ -1500,8 +1775,12 @@ function TradeDetailsPane({
 
         {/* actions */}
         <div className="space-y-2">
-          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">Actions</p>
-          {actionMsg && <p className="text-[11px] text-error px-1">{actionMsg}</p>}
+          <p className="text-[10px] text-foreground/45 uppercase tracking-wider">
+            Actions
+          </p>
+          {actionMsg && (
+            <p className="text-[11px] text-error px-1">{actionMsg}</p>
+          )}
 
           {/* Mutual-cancellation APPEAL — Agree to Cancel / Reject when the
               counterparty raised one, or a "waiting" note when I did. Self-hides
@@ -1512,7 +1791,11 @@ function TradeDetailsPane({
               orderId={order?.id ?? convo.order_id}
               viewerActorId={merchantId}
               variant="merchant"
-              enabled={!["cancelled", "expired", "completed", "disputed"].includes(status)}
+              enabled={
+                !["cancelled", "expired", "completed", "disputed"].includes(
+                  status,
+                )
+              }
               onResolved={onAppealResolved}
             />
           )}
@@ -1524,7 +1807,9 @@ function TradeDetailsPane({
                 Cancel &amp; refund requested
               </p>
               {cancelReqReason && (
-                <p className="text-[11px] text-foreground/55 leading-snug">{cancelReqReason}</p>
+                <p className="text-[11px] text-foreground/55 leading-snug">
+                  {cancelReqReason}
+                </p>
               )}
               <p className="text-[11px] text-foreground/55 leading-snug">
                 If you agree, the order is cancelled and the escrow is refunded.
@@ -1535,7 +1820,11 @@ function TradeDetailsPane({
                   disabled={respondingCancel}
                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-accent-text text-[13px] font-semibold disabled:opacity-50"
                 >
-                  {respondingCancel ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                  {respondingCancel ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Check className="w-3.5 h-3.5" />
+                  )}
                   Agree to cancel
                 </button>
                 <button
@@ -1561,13 +1850,19 @@ function TradeDetailsPane({
           {visibleButtons.length === 0 ? (
             !incomingCancelRequest && !iRequestedCancel ? (
               <p className="text-[11px] text-foreground/40 py-1">
-                {order ? "No actions available for this status." : loading ? "Loading actions…" : "—"}
+                {order
+                  ? "No actions available for this status."
+                  : loading
+                  ? "Loading actions…"
+                  : "—"}
               </p>
             ) : null
           ) : (
             visibleButtons.map((b) => {
               const Icon = ACTION_ICON[b.type] ?? Check;
-              const redirectsToDashboard = DASHBOARD_REDIRECT_ACTIONS.has(b.type);
+              const redirectsToDashboard = DASHBOARD_REDIRECT_ACTIONS.has(
+                b.type,
+              );
               const cls =
                 b.kind === "secondary"
                   ? b.type === "DISPUTE"
@@ -1582,14 +1877,22 @@ function TradeDetailsPane({
                   title={b.reason}
                   className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${cls}`}
                 >
-                  {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Icon className="w-4 h-4" />}
+                  {actionLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Icon className="w-4 h-4" />
+                  )}
                   {b.label}
-                  {redirectsToDashboard && <ExternalLink className="w-3 h-3 opacity-60" />}
+                  {redirectsToDashboard && (
+                    <ExternalLink className="w-3 h-3 opacity-60" />
+                  )}
                 </button>
               );
             })
           )}
-          {visibleButtons.some((b) => DASHBOARD_REDIRECT_ACTIONS.has(b.type)) && (
+          {visibleButtons.some((b) =>
+            DASHBOARD_REDIRECT_ACTIONS.has(b.type),
+          ) && (
             <p className="text-[10px] text-foreground/40 text-center leading-snug">
               Accepting a trade opens the dashboard for wallet signing.
             </p>
@@ -1614,24 +1917,46 @@ function TradeDetailsPane({
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
           <CircleDollarSign className="w-3.5 h-3.5 text-foreground/50 shrink-0 mt-0.5" />
           <p className="text-[11px] text-foreground/60 leading-snug">
-            Merchant rate + Blip fee apply on settlement. Release only after funds confirm.
+            Merchant rate + Blip fee apply on settlement. Release only after
+            funds confirm.
           </p>
         </div>
       </div>
 
       {/* need help */}
       <div className="shrink-0 border-t border-white/[0.06] p-3">
-        <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Need Help?</p>
+        <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">
+          Need Help?
+        </p>
         <button
           type="button"
           title="Support"
-          onClick={() => openIssueReporter()}
+          onClick={() => setShowSupport(true)}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-white/12 text-foreground/80 hover:text-foreground hover:bg-white/[0.06] text-sm transition-colors"
         >
           <LifeBuoy className="w-4 h-4" />
           Support
         </button>
       </div>
+
+      {showSupport && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setShowSupport(false)}
+          />
+          <div className="relative w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-white/[0.08] bg-[var(--color-bg-secondary)] shadow-2xl">
+            <button
+              onClick={() => setShowSupport(false)}
+              aria-label="Close"
+              className="absolute top-3 right-3 z-10 p-1.5 rounded-lg hover:bg-white/[0.06] text-foreground/50"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <MerchantSupportPanel merchantId={merchantId} />
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -1643,7 +1968,10 @@ function TradeDetailsPane({
 
       {show && (
         <>
-          <div className="lg:hidden fixed inset-0 z-30 bg-black/50" onClick={onClose} />
+          <div
+            className="lg:hidden fixed inset-0 z-30 bg-black/50"
+            onClick={onClose}
+          />
           <aside className="lg:hidden fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] bg-[var(--color-bg-secondary)] border-l border-white/[0.06] shadow-2xl flex flex-col">
             {body}
           </aside>
@@ -1669,11 +1997,25 @@ function TradeDetailsPane({
   );
 }
 
-function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function DetailRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-2.5">
       <span className="text-[11px] text-foreground/50 shrink-0">{label}</span>
-      <span className={`text-xs font-semibold text-foreground truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+      <span
+        className={`text-xs font-semibold text-foreground truncate ${
+          mono ? "font-mono" : ""
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -1697,16 +2039,28 @@ function TimeRemaining({ expiresAt }: { expiresAt: string }) {
 
   return (
     <div>
-      <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Time Remaining</p>
+      <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">
+        Time Remaining
+      </p>
       <div className="bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <Clock className={`w-4 h-4 ${urgent ? "text-warning" : "text-foreground/50"}`} />
-          <span className={`text-lg font-bold font-mono tabular-nums ${urgent ? "text-warning" : "text-foreground"}`}>
+          <Clock
+            className={`w-4 h-4 ${
+              urgent ? "text-warning" : "text-foreground/50"
+            }`}
+          />
+          <span
+            className={`text-lg font-bold font-mono tabular-nums ${
+              urgent ? "text-warning" : "text-foreground"
+            }`}
+          >
             {mm}:{ss}
           </span>
           <span className="text-[11px] text-foreground/45">min</span>
         </div>
-        <p className="text-[10px] text-foreground/45 mt-1">Do not release crypto before receiving payment.</p>
+        <p className="text-[10px] text-foreground/45 mt-1">
+          Do not release crypto before receiving payment.
+        </p>
       </div>
     </div>
   );
@@ -1744,11 +2098,17 @@ function PaymentStatus({ status }: { status: string }) {
       tone = "muted";
   }
   const toneCls =
-    tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-foreground/55";
+    tone === "success"
+      ? "text-success"
+      : tone === "warning"
+      ? "text-warning"
+      : "text-foreground/55";
 
   return (
     <div>
-      <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">Payment Status</p>
+      <p className="text-[10px] text-foreground/45 uppercase tracking-wider mb-1.5">
+        Payment Status
+      </p>
       <div className="flex items-center gap-2 bg-[var(--color-bg-tertiary)] border border-white/[0.06] rounded-xl px-3 py-2.5">
         <Icon className={`w-4 h-4 shrink-0 ${toneCls}`} />
         <span className={`text-xs font-medium ${toneCls}`}>{label}</span>
