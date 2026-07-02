@@ -68,6 +68,7 @@ import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
 import { deriveCounterparty } from "@/components/shared/profile/counterparty";
 import { MerchantAppealSheet } from "@/components/merchant/MerchantAppealSheet";
+import { MerchantSupportPanel } from "@/components/merchant/MerchantSupportPanel";
 import { MutualCancelAppealBanner } from "@/components/shared/MutualCancelAppealBanner";
 import { useOrderAppeal, isActiveAppeal } from "@/hooks/useOrderAppeal";
 
@@ -1713,10 +1714,23 @@ function ActiveOrderBody({
   const needsLock = isSeller && status === "accepted";
   const recv = useMerchantReceivingMethods(needsLock);
   const [recvPickedId, setRecvPickedId] = useLocalState<string | null>(null);
+  // BUY orders: constrain the receiving-account picker to the rails the buyer
+  // chose (buyer_payment_types) so it never auto-selects the merchant's default
+  // UPI when the buyer picked bank. Sell / legacy (no buyer_payment_types) keep
+  // the full list + is-default behaviour unchanged.
+  const recvBuyerTypes = (db as { buyer_payment_types?: string[] })
+    .buyer_payment_types;
+  const recvAllowedTypes =
+    Array.isArray(recvBuyerTypes) && recvBuyerTypes.length > 0
+      ? recvBuyerTypes
+      : null;
+  const recvShownMethods = recvAllowedTypes
+    ? recv.methods.filter((m) => recvAllowedTypes.includes(m.type))
+    : recv.methods;
   const recvSelectedId =
     recvPickedId ??
-    recv.methods.find((m) => m.is_default)?.id ??
-    recv.methods[0]?.id ??
+    recvShownMethods.find((m) => m.is_default)?.id ??
+    recvShownMethods[0]?.id ??
     null;
 
   // Bubble the effective receiving account up to the popup footer so its
@@ -2634,7 +2648,7 @@ function ActiveOrderBody({
 
         {/* Receive Payment In — seller's receiving-account picker */}
         <ReceivingAccountPicker
-          methods={recv.methods}
+          methods={recvShownMethods}
           selectedId={recvSelectedId}
           onSelect={setRecvPickedId}
           onAddNew={() => {
@@ -2644,10 +2658,18 @@ function ActiveOrderBody({
           loading={recv.loading}
           surfaces={SURFACES.merchant}
           error={
-            recv.error && recv.methods.length === 0 ? recv.error : null
+            recv.error && recvShownMethods.length === 0
+              ? recv.error
+              : !recv.loading &&
+                  recvShownMethods.length === 0 &&
+                  recv.methods.length > 0
+                ? "None of your accounts match the buyer's chosen payment method — add a matching account."
+                : null
           }
           onRetry={
-            recv.error && recv.methods.length === 0 ? recv.refetch : undefined
+            recv.error && recvShownMethods.length === 0
+              ? recv.refetch
+              : undefined
           }
           title="Receive Payment In"
           subtitle="Choose account where you want to receive payment"
@@ -2924,7 +2946,7 @@ function ActiveOrderBody({
           {/* Select Receiving Account — seller picks where the buyer pays (lock stage) */}
           {needsLock && (
             <ReceivingAccountPicker
-              methods={recv.methods}
+              methods={recvShownMethods}
               selectedId={recvSelectedId}
               onSelect={setRecvPickedId}
               onAddNew={() => {
@@ -2938,10 +2960,16 @@ function ActiveOrderBody({
               loading={recv.loading}
               surfaces={SURFACES.merchant}
               error={
-                recv.error && recv.methods.length === 0 ? recv.error : null
+                recv.error && recvShownMethods.length === 0
+                  ? recv.error
+                  : !recv.loading &&
+                      recvShownMethods.length === 0 &&
+                      recv.methods.length > 0
+                    ? "None of your accounts match the buyer's chosen payment method — add a matching account."
+                    : null
               }
               onRetry={
-                recv.error && recv.methods.length === 0
+                recv.error && recvShownMethods.length === 0
                   ? recv.refetch
                   : undefined
               }
@@ -3206,6 +3234,10 @@ export function OrderQuickView({
 
   // Copy feedback for the Order ID shown in the completed-order app-bar.
   const [hdrCopied, setHdrCopied] = useLocalState(false);
+
+  // Support panel — "Need Help" opens it as an in-place modal (mirrors the
+  // merchant chat page) instead of navigating away to Settings › Support.
+  const [showSupport, setShowSupport] = useLocalState(false);
 
   // In-flight guard for the inline order-extension accept/decline buttons, so a
   // double-tap can't fire two PUTs and a failure can no longer pass silently.
@@ -4456,23 +4488,7 @@ export function OrderQuickView({
                                 </button>
                               )}
                               <button
-                                onClick={() => {
-                                  // Open the merchant Support panel (help/ticketing),
-                                  // which lives in settings under the `support` tab.
-                                  // Use client-side nav (not window.location) so the
-                                  // in-memory merchant auth store survives — a hard
-                                  // reload bounces to /market/login before the async
-                                  // /api/auth/me restore repopulates the store.
-                                  // Carry the order id so "back" from support reopens
-                                  // this exact order instead of the settings list.
-                                  const returnOrderId = isFull ? selectedOrder?.id : null;
-                                  onClose();
-                                  router.push(
-                                    returnOrderId
-                                      ? `/market/settings?tab=support&returnOrder=${returnOrderId}`
-                                      : "/market/settings?tab=support",
-                                  );
-                                }}
+                                onClick={() => setShowSupport(true)}
                                 className="flex-1 py-3 rounded-xl border border-white/[0.12] bg-white/[0.04] hover:bg-white/[0.08] text-[#f5f5f7] text-sm font-semibold flex items-center justify-center gap-1.5 transition-all"
                               >
                                 <Headphones className="w-4 h-4" />
@@ -4519,6 +4535,40 @@ export function OrderQuickView({
         onClose={() => setAppealSheet(null)}
         onSubmitted={onClose}
       />
+    )}
+    {/* Support panel modal — opened by "Need Help". Layered above the popup
+        (z-[160]); mirrors the merchant chat page's support modal so help/
+        ticketing opens in place instead of navigating to Settings. */}
+    {showSupport && (
+      <div
+        className="fixed inset-0 z-[160] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Support"
+      >
+        <div
+          className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowSupport(false)}
+        />
+        <div className="relative w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-white/[0.08] bg-[var(--color-bg-secondary)] shadow-2xl">
+          {/* Sticky close bar — keeps the ✕ clear of the panel's own header
+              buttons while the ticket list scrolls. */}
+          <div className="sticky top-0 z-10 flex justify-end px-3 pt-3 pb-1 bg-[var(--color-bg-secondary)]">
+            <button
+              onClick={() => setShowSupport(false)}
+              aria-label="Close support"
+              className="p-1.5 rounded-lg hover:bg-white/[0.06] text-foreground/60 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {/* Panel supplies no gutter of its own (Settings normally does), so
+              the modal provides the horizontal + bottom padding. */}
+          <div className="px-5 pb-5">
+            <MerchantSupportPanel merchantId={merchantId} />
+          </div>
+        </div>
+      </div>
     )}
     </ProfileOpenContext.Provider>
   );

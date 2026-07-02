@@ -3656,6 +3656,10 @@ export const OrderDetailScreen = ({
               onNeedHelp={() => setScreen("support")}
               onMarkPaymentSent={markPaymentSent}
               onAppeal={() => setShowAppeal(true)}
+              onCancel={() =>
+                openCancel(() => requestCancelOrder("Cancelled by buyer"))
+              }
+              isCancelling={isRequestingCancel}
               onCopy={(key, value) => copyField(key, value)}
               copiedField={copiedField}
               needsPayMethodPick={needsPayMethodPick}

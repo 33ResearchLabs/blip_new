@@ -40,6 +40,7 @@ import {
   MessageCircle,
   Star,
   Loader2,
+  X,
 } from "lucide-react";
 import type { Order, MerchantPaymentMethod } from "./types";
 import { formatCrypto, formatCount } from "@/lib/format";
@@ -143,6 +144,10 @@ export interface OrderPaymentScreenProps {
   onNeedHelp: () => void;
   onMarkPaymentSent: () => void;
   onAppeal: () => void;
+  /** Cancel the order — only surfaced BEFORE escrow is locked. */
+  onCancel: () => void;
+  /** True while a cancel request is in flight (disables the Cancel button). */
+  isCancelling?: boolean;
   onCopy: (key: string, value: string) => void;
   copiedField: string | null;
   needsPayMethodPick: boolean;
@@ -166,6 +171,8 @@ export function OrderPaymentScreen({
   onNeedHelp,
   onMarkPaymentSent,
   onAppeal,
+  onCancel,
+  isCancelling = false,
   onCopy,
   copiedField,
   needsPayMethodPick,
@@ -661,11 +668,29 @@ export function OrderPaymentScreen({
               {needsPayMethodPick ? "Select an account first" : "I have made the payment"}
             </motion.button>
           )}
-          {/* No "Cancel Order" button here. This screen only renders once a
-              merchant has accepted the order, and per product the buyer can no
-              longer cancel after acceptance — the exits are Back (header),
-              Raise Appeal, and Need help. Cancel is only offered BEFORE a
-              merchant accepts (the matching phase). */}
+          {/* Cancel Order — offered ONLY before escrow is locked (accepted /
+              escrow_pending, i.e. !fundsLocked). For a BUY order the merchant
+              locks escrow, so the buyer has nothing secured in this window and
+              can safely back out; the state machine allows CANCEL from accepted
+              and there's no escrow to refund. The parent's openCancel() shows
+              the confirmation sheet before running the cancel. The instant
+              escrow locks this disappears and the inline "Need help?" Appeal
+              (below the Payment details) becomes the exit instead. */}
+          {!fundsLocked && (
+            <motion.button
+              whileTap={{ scale: 0.98 }}
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="w-full py-4 rounded-2xl text-[15px] font-semibold text-error border border-error-border hover:bg-error-dim disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {isCancelling ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <X className="w-4 h-4" />
+              )}
+              Cancel Order
+            </motion.button>
+          )}
           {/* No pre-escrow Raise Appeal here. Appeals require locked escrow —
               before that nothing is at stake, so the exit is Cancel during the
               matching phase, not an appeal. Once escrow is locked, the "Need
