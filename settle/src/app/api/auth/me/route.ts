@@ -39,13 +39,13 @@ export async function GET(request: NextRequest) {
       // pre-146 projection so auth never collapses over a schema lag.
       const SELECT_WITH_LAYOUT = `SELECT id, username, display_name, business_name, wallet_address,
                 avatar_url, bio, email, rating, total_trades, is_online, balance,
-                has_ops_access, dashboard_layout,
+                has_ops_access, dashboard_layout, created_at,
                 COALESCE(has_compliance_access, false) as has_compliance_access
          FROM merchants
          WHERE id = $1 AND status = 'active'`;
       const SELECT_WITHOUT_LAYOUT = `SELECT id, username, display_name, business_name, wallet_address,
                 avatar_url, bio, email, rating, total_trades, is_online, balance,
-                has_ops_access,
+                has_ops_access, created_at,
                 COALESCE(has_compliance_access, false) as has_compliance_access
          FROM merchants
          WHERE id = $1 AND status = 'active'`;
