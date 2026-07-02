@@ -694,10 +694,14 @@ export default function TradeChatPage() {
       m.messageType === "image" || m.imageUrl
         ? "image"
         : m.messageType === "file" || m.fileUrl
-          ? "file"
-          : "text";
+        ? "file"
+        : "text";
     const preview =
-      kind === "image" ? "Photo" : kind === "file" ? m.fileName || "File" : (m.text || "").slice(0, 140);
+      kind === "image"
+        ? "Photo"
+        : kind === "file"
+        ? m.fileName || "File"
+        : (m.text || "").slice(0, 140);
     return {
       id: m.id,
       senderType: m.senderType ?? "merchant",
@@ -1436,72 +1440,76 @@ function MessageItem({
               : "bg-white/[0.05] text-foreground border border-white/[0.06] rounded-bl-md"
           }`}
         >
-        {m.replyTo && (
-          <ReplyReference reference={m.replyTo} onJump={onJump} className="mb-1.5" />
-        )}
-        {m.imageUrl && (
-          <img
-            src={m.imageUrl}
-            alt=""
-            className="rounded-lg mb-1 max-h-48 object-cover cursor-zoom-in"
-            onClick={() =>
-              viewer
-                ? viewer.open(m.imageUrl!)
-                : window.open(m.imageUrl!, "_blank", "noopener")
-            }
-          />
-        )}
-        {m.fileUrl && !m.imageUrl && (
-          <a
-            href={m.fileUrl}
-            target="_blank"
-            rel="noreferrer"
-            className={`flex items-center gap-1.5 text-xs underline ${
-              mine ? "text-accent-text/80" : "text-accent"
+          {m.replyTo && (
+            <ReplyReference
+              reference={m.replyTo}
+              onJump={onJump}
+              className="mb-1.5"
+            />
+          )}
+          {m.imageUrl && (
+            <img
+              src={m.imageUrl}
+              alt=""
+              className="rounded-lg mb-1 max-h-48 object-cover cursor-zoom-in"
+              onClick={() =>
+                viewer
+                  ? viewer.open(m.imageUrl!)
+                  : window.open(m.imageUrl!, "_blank", "noopener")
+              }
+            />
+          )}
+          {m.fileUrl && !m.imageUrl && (
+            <a
+              href={m.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={`flex items-center gap-1.5 text-xs underline ${
+                mine ? "text-accent-text/80" : "text-accent"
+              }`}
+            >
+              <ExternalLink className="w-3 h-3" />
+              {m.fileName ?? "Attachment"}
+            </a>
+          )}
+          {m.text && (
+            <p className="text-sm leading-snug whitespace-pre-wrap break-words">
+              {m.text}
+            </p>
+          )}
+          <div
+            className={`flex items-center gap-1 justify-end mt-0.5 ${
+              mine ? "text-accent-text/50" : "text-foreground/40"
             }`}
           >
-            <ExternalLink className="w-3 h-3" />
-            {m.fileName ?? "Attachment"}
-          </a>
-        )}
-        {m.text && (
-          <p className="text-sm leading-snug whitespace-pre-wrap break-words">
-            {m.text}
-          </p>
-        )}
-        <div
-          className={`flex items-center gap-1 justify-end mt-0.5 ${
-            mine ? "text-accent-text/50" : "text-foreground/40"
-          }`}
-        >
-          <span className="text-[9px]">
-            {m.timestamp instanceof Date
-              ? clock(m.timestamp)
-              : clock(new Date(m.timestamp))}
-          </span>
-          {mine &&
-            (m.status === "read" ? (
-              <CheckCheck className="w-3 h-3 text-info" />
-            ) : m.status === "delivered" ? (
-              <CheckCheck className="w-3 h-3" />
-            ) : m.status === "sending" ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : m.status === "failed" ? (
-              <button
-                type="button"
-                onClick={() => onRetry?.(m.id)}
-                title="Not delivered — tap to retry"
-                aria-label="Message failed to send. Tap to retry."
-                className="flex items-center gap-0.5 text-error"
-              >
-                <AlertTriangle className="w-3 h-3" />
-                <span className="text-[9px] underline">Retry</span>
-              </button>
-            ) : (
-              <Check className="w-3 h-3" />
-            ))}
+            <span className="text-[9px]">
+              {m.timestamp instanceof Date
+                ? clock(m.timestamp)
+                : clock(new Date(m.timestamp))}
+            </span>
+            {mine &&
+              (m.status === "read" ? (
+                <CheckCheck className="w-3 h-3 text-info" />
+              ) : m.status === "delivered" ? (
+                <CheckCheck className="w-3 h-3" />
+              ) : m.status === "sending" ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : m.status === "failed" ? (
+                <button
+                  type="button"
+                  onClick={() => onRetry?.(m.id)}
+                  title="Not delivered — tap to retry"
+                  aria-label="Message failed to send. Tap to retry."
+                  className="flex items-center gap-0.5 text-error"
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  <span className="text-[9px] underline">Retry</span>
+                </button>
+              ) : (
+                <Check className="w-3 h-3" />
+              ))}
+          </div>
         </div>
-      </div>
       </SwipeToReply>
     </div>
   );
@@ -1940,20 +1948,35 @@ function TradeDetailsPane({
       </div>
 
       {showSupport && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Support"
+        >
           <div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setShowSupport(false)}
           />
           <div className="relative w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-white/[0.08] bg-[var(--color-bg-secondary)] shadow-2xl">
-            <button
-              onClick={() => setShowSupport(false)}
-              aria-label="Close"
-              className="absolute top-3 right-3 z-10 p-1.5 rounded-lg hover:bg-white/[0.06] text-foreground/50"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <MerchantSupportPanel merchantId={merchantId} />
+            {/* Sticky close bar — the panel's own "My Tickets" button sits
+                top-right, so an overlaid ✕ collided with it. A dedicated bar
+                keeps the close clear of the header and reachable while the
+                ticket list scrolls. */}
+            <div className="sticky top-0 z-10 flex justify-end px-3 pt-3 pb-1 bg-[var(--color-bg-secondary)]">
+              <button
+                onClick={() => setShowSupport(false)}
+                aria-label="Close support"
+                className="p-1.5 rounded-lg hover:bg-white/[0.06] text-foreground/60 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            {/* Panel has no padding of its own (Settings supplies it), so the
+                modal provides the horizontal + bottom gutter here. */}
+            <div className="px-5 pb-5">
+              <MerchantSupportPanel merchantId={merchantId} />
+            </div>
           </div>
         </div>
       )}

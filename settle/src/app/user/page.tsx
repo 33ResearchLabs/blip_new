@@ -100,6 +100,7 @@ import {
   EscrowLockScreen,
   OrderDetailScreen,
   OrdersListScreen,
+  StatementScreen,
   ProfileScreen,
   ChatListScreen,
   ChatViewScreen,
@@ -1115,6 +1116,24 @@ export default function Home() {
               cancelledOrders={cancelledOrders}
               maxW={maxW}
               notificationCount={notifications.filter((n) => !n.read).length}
+              hideBottomNav={!!isDesktop}
+            />
+          </Panel>
+        )}
+
+        {screen === "statement" && (
+          <Panel
+            k="statement"
+            className="relative"
+            style={theme === "light" ? lightPanelBg : darkBg}
+            desktop={!!isDesktop}
+          >
+            <StatementScreen
+              screen={screen}
+              setScreen={setScreen}
+              setActiveOrderId={setActiveOrderId}
+              orders={orders}
+              maxW={maxW}
               hideBottomNav={!!isDesktop}
             />
           </Panel>

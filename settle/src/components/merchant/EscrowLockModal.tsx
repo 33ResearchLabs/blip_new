@@ -59,9 +59,24 @@ export function EscrowLockModal({
   // buyer pays into; the choice is shared with the buyer on lock (req 9).
   const recv = useMerchantReceivingMethods(showEscrowModal && !escrowTxHash);
   const [pickedId, setPickedId] = useState<string | null>(null);
-  // Auto-select the default (or first) until the seller explicitly picks.
+  // For a BUY order the buyer chose which rails they can pay with
+  // (buyer_payment_types). Only offer — and default to — receiving accounts
+  // whose TYPE the buyer chose, so the picker never auto-selects the merchant's
+  // default UPI when the buyer picked bank. Sell / legacy orders carry no
+  // buyer_payment_types, so the full list + is-default behaviour is preserved.
+  const buyerPayTypes = (
+    escrowOrder?.dbOrder as { buyer_payment_types?: string[] } | undefined
+  )?.buyer_payment_types;
+  const allowedTypes =
+    Array.isArray(buyerPayTypes) && buyerPayTypes.length > 0
+      ? buyerPayTypes
+      : null;
+  const shownMethods = allowedTypes
+    ? recv.methods.filter((m) => allowedTypes.includes(m.type))
+    : recv.methods;
+  // Auto-select the default (or first) MATCHING account until the seller picks.
   const defaultAcctId =
-    recv.methods.find((m) => m.is_default)?.id ?? recv.methods[0]?.id ?? null;
+    shownMethods.find((m) => m.is_default)?.id ?? shownMethods[0]?.id ?? null;
   const selectedAcctId = pickedId ?? defaultAcctId;
 
   // "Lock Escrow" is step index 1 of the 5-step flow; advance to "Buyer Pays"
@@ -204,7 +219,7 @@ export function EscrowLockModal({
                 {/* Select receiving account — shared with the buyer on lock */}
                 {!escrowTxHash && (
                   <ReceivingAccountPicker
-                    methods={recv.methods}
+                    methods={shownMethods}
                     selectedId={selectedAcctId}
                     onSelect={setPickedId}
                     onAddNew={() => {
@@ -218,14 +233,16 @@ export function EscrowLockModal({
                     loading={recv.loading}
                     surfaces={S}
                     error={
-                      recv.error && recv.methods.length === 0
+                      recv.error && shownMethods.length === 0
                         ? recv.error
-                        : !recv.loading && recv.methods.length === 0
-                          ? "Add a payment method to lock escrow."
+                        : !recv.loading && shownMethods.length === 0
+                          ? recv.methods.length > 0
+                            ? "None of your accounts match the buyer's chosen payment method — add a matching account."
+                            : "Add a payment method to lock escrow."
                           : null
                     }
                     onRetry={
-                      recv.error && recv.methods.length === 0
+                      recv.error && shownMethods.length === 0
                         ? recv.refetch
                         : undefined
                     }

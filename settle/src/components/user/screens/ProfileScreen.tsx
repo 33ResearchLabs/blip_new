@@ -25,6 +25,7 @@ import {
   Phone,
   Gauge,
   ShieldCheck,
+  Receipt,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
@@ -609,6 +610,18 @@ export const ProfileScreen = ({
 
         {/* ── 1. Payment Methods (own card, always-visible list) ── */}
         <PaymentMethodsManager userId={userId} />
+
+        {/* ── Statement ── entry point to the fiat financial statement:
+            per-currency totals of fiat sent / received plus a filterable,
+            exportable ledger of every order. */}
+        <SettingsGroup label="Statement" icon={<Receipt className="w-3.5 h-3.5" />}>
+          <SettingsRow
+            icon={<Receipt className="w-[15px] h-[15px]" />}
+            title="Payment Statement"
+            subtitle="Track fiat sent & received"
+            onClick={() => setScreen("statement")}
+          />
+        </SettingsGroup>
 
         {/* ── Trading Limits ── entry point to the user limits screen
             (daily / per-transaction caps, usage, request-increase + X

@@ -39,6 +39,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ProfileSheet } from "@/components/shared/profile/ProfileSheet";
 import type { ProfileEntityType } from "@/components/shared/profile/types";
 import { deriveCounterparty } from "@/components/shared/profile/counterparty";
+import { formatCrypto } from "@/lib/format";
 import {
   useCorridorPrices,
   resolveCorridorRef,
@@ -510,7 +511,7 @@ const OrderList = memo(function OrderList({
                           Pay
                         </span>
                         <span className="font-bold text-foreground">
-                          {Math.round(amount).toLocaleString()} USDT
+                          {formatCrypto(amount)} USDT
                         </span>
                       </span>
                       <ArrowRight className="w-3 h-3 text-foreground/20" />
@@ -786,7 +787,7 @@ const OrderList = memo(function OrderList({
                       order.dbOrder,
                       merchantInfo?.id,
                     );
-                    const cryptoAmt = Math.round(order.amount).toLocaleString();
+                    const cryptoAmt = formatCrypto(order.amount);
                     const fiatAmt = Math.round(order.total).toLocaleString();
                     const primaryAmt = cryptoAmt;
                     const primaryCcy = order.fromCurrency;
@@ -2316,7 +2317,7 @@ const MyOrdersList = memo(function MyOrdersList({
           : null;
 
         const crypto = {
-          amount: Math.round(amount).toLocaleString(),
+          amount: formatCrypto(amount),
           currency: fromCurrency,
         };
         const fiat = {

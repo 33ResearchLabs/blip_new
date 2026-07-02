@@ -1,5 +1,5 @@
 // Types
-export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade" | "wallet" | "notifications" | "support" | "rewards" | "raise-ticket" | "send" | "reputation" | "limits" | "stake" | "points" | "disputes";
+export type Screen = "home" | "order" | "escrow" | "orders" | "statement" | "profile" | "chats" | "chat-view" | "create-offer" | "cash-confirm" | "matching" | "welcome" | "trade" | "wallet" | "notifications" | "support" | "rewards" | "raise-ticket" | "send" | "reputation" | "limits" | "stake" | "points" | "disputes";
 export type TradeType = "buy" | "sell";
 export type TradePreference = "fast" | "cheap" | "best";
 export type PaymentMethod = "bank" | "cash";

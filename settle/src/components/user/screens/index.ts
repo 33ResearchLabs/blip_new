@@ -3,6 +3,7 @@ export { TradeCreationScreen } from './TradeCreationScreen';
 export { EscrowLockScreen } from './EscrowLockScreen';
 export { OrderDetailScreen } from './OrderDetailScreen';
 export { OrdersListScreen } from './OrdersListScreen';
+export { StatementScreen } from './StatementScreen';
 export { ProfileScreen } from './ProfileScreen';
 export { ChatListScreen } from './ChatListScreen';
 export { ChatViewScreen } from './ChatViewScreen';
