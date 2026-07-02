@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Coins,
   Sparkles,
@@ -28,10 +28,19 @@ import {
   UserPlus,
   Check,
   ChevronRight,
+  Copy,
+  BadgeCheck,
+  Gift,
+  Send,
+  Instagram,
+  MessageCircle,
+  MoreHorizontal,
   type LucideIcon,
 } from "lucide-react";
 import { MerchantNavbar } from "@/components/merchant/MerchantNavbar";
 import { useMerchantStore } from "@/stores/merchantStore";
+import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
+import { copyToClipboard } from "@/lib/clipboard";
 import { formatCount } from "@/lib/format";
 
 // X (formerly Twitter) brand mark — Lucide has no first-party X glyph, so this
@@ -315,6 +324,294 @@ function EarnRow({ rule, index }: { rule: EarnRule; index: number }) {
 const SECTION_LABEL =
   "text-[11px] font-mono uppercase tracking-[0.18em] text-white/35";
 
+// ─── Refer & Earn ───────────────────────────────────────────────────────────
+//
+// Real data — pulls the merchant's referral_code from /api/waitlist/me, the
+// same endpoint the user app uses. That route is actor-aware (returns the
+// merchants row for a merchant token) and lazily generates a code when the
+// column is still NULL, so no new backend work is required. Best-effort: any
+// fetch failure leaves the card on its "—" placeholder with actions disabled.
+
+const REFERRAL_LINK_BASE = `${
+  process.env.NEXT_PUBLIC_APP_URL || "https://app.blip.money"
+}/waitlist?ref=`;
+
+type SharePlatform = {
+  key: string;
+  label: string;
+  Icon: LucideIcon;
+  /** Deep-link URL to open in a new tab. Receives the message + invite url. */
+  href?: (msg: string, url: string) => string;
+  /** Special-case action (clipboard copy, native share). */
+  onAction?: (msg: string, url: string) => void | Promise<void>;
+};
+
+function ReferAndEarnCard() {
+  const merchantId = useMerchantStore((s) => s.merchantId);
+
+  const [code, setCode] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!merchantId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithAuth("/api/waitlist/me");
+        if (!res.ok) return;
+        const json = (await res.json()) as {
+          success?: boolean;
+          data?: { actor?: { referral_code?: string | null } };
+        };
+        if (cancelled || !json?.success) return;
+        setCode(json.data?.actor?.referral_code ?? null);
+      } catch {
+        // Swallow — the placeholder state stands in.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [merchantId]);
+
+  const hasCode = !!code;
+  const referralCode = code ?? "—";
+  const referralLink = hasCode
+    ? `${REFERRAL_LINK_BASE}${code}`
+    : REFERRAL_LINK_BASE;
+  const shareMessage = hasCode
+    ? `Trade on Blip with my code ${referralCode} and we both earn USDT on your first trade.`
+    : "Trade on Blip and earn USDT on your first trade.";
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 1800);
+  };
+
+  const handleCopyCode = async () => {
+    if (!hasCode) return;
+    if (await copyToClipboard(referralCode)) {
+      setCopiedCode(true);
+      showToast("Referral code copied");
+      setTimeout(() => setCopiedCode(false), 1800);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!hasCode) return;
+    if (await copyToClipboard(referralLink)) {
+      setCopiedLink(true);
+      showToast("Invite link copied");
+      setTimeout(() => setCopiedLink(false), 1800);
+    }
+  };
+
+  const SHARE_PLATFORMS: SharePlatform[] = [
+    {
+      key: "whatsapp",
+      label: "WhatsApp",
+      Icon: MessageCircle,
+      href: (msg, url) =>
+        `https://wa.me/?text=${encodeURIComponent(`${msg} ${url}`)}`,
+    },
+    {
+      key: "telegram",
+      label: "Telegram",
+      Icon: Send,
+      href: (msg, url) =>
+        `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(msg)}`,
+    },
+    {
+      key: "twitter",
+      label: "X (Twitter)",
+      Icon: XIcon,
+      href: (msg, url) =>
+        `https://twitter.com/intent/tweet?text=${encodeURIComponent(msg)}&url=${encodeURIComponent(url)}`,
+    },
+    {
+      key: "instagram",
+      label: "Instagram",
+      // Instagram has no public share URL — copy the link + tell the user.
+      Icon: Instagram,
+      onAction: async (_msg, url) => {
+        const ok = await copyToClipboard(url);
+        showToast(ok ? "Link copied — paste into Instagram" : "Couldn't copy link");
+      },
+    },
+    {
+      key: "more",
+      label: "More",
+      Icon: MoreHorizontal,
+      onAction: async (msg, url) => {
+        const shareData = { title: "Join me on Blip", text: msg, url };
+        if (
+          typeof navigator !== "undefined" &&
+          typeof (navigator as { share?: unknown }).share === "function"
+        ) {
+          try {
+            await (navigator as unknown as { share: (d: unknown) => Promise<void> }).share(
+              shareData,
+            );
+          } catch (err) {
+            // AbortError = user dismissed the sheet — do nothing.
+            if ((err as { name?: string })?.name !== "AbortError") {
+              if (await copyToClipboard(url)) showToast("Invite link copied");
+            }
+          }
+          return;
+        }
+        if (await copyToClipboard(url)) showToast("Invite link copied");
+      },
+    },
+  ];
+
+  const handleShareClick = (p: SharePlatform) => {
+    if (!hasCode) return;
+    if (p.onAction) {
+      void p.onAction(shareMessage, referralLink);
+      return;
+    }
+    if (p.href && typeof window !== "undefined") {
+      window.open(p.href(shareMessage, referralLink), "_blank", "noopener,noreferrer");
+    }
+  };
+
+  return (
+    <>
+      <motion.section
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
+        className="mt-8 rounded-3xl border border-white/[0.08] bg-white/[0.02] p-6 lg:p-8"
+      >
+        {/* Code + status + gift motif */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className={SECTION_LABEL}>Your Referral Code</p>
+            <div className="mt-2 flex items-center gap-2.5 min-w-0">
+              <p className="text-[26px] lg:text-[30px] font-extrabold tracking-[-0.02em] leading-none select-all truncate">
+                {referralCode}
+              </p>
+              <motion.button
+                whileTap={{ scale: 0.9 }}
+                onClick={handleCopyCode}
+                disabled={!hasCode}
+                aria-label="Copy referral code"
+                className="shrink-0 w-9 h-9 rounded-xl flex items-center justify-center bg-white/[0.05] border border-white/10 text-white/80 hover:bg-white/[0.08] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {copiedCode ? (
+                  <Check className="w-4 h-4 text-white" strokeWidth={2.6} />
+                ) : (
+                  <Copy className="w-4 h-4" strokeWidth={2.2} />
+                )}
+              </motion.button>
+            </div>
+            <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.08]">
+              <BadgeCheck className="w-3.5 h-3.5 text-white/70" strokeWidth={2.4} />
+              <span className="text-[11px] font-bold text-white/70">
+                Valid &amp; Active
+              </span>
+            </div>
+          </div>
+          <div
+            className="shrink-0 w-14 h-14 lg:w-16 lg:h-16 rounded-2xl flex items-center justify-center border border-white/20"
+            style={{
+              background:
+                "linear-gradient(150deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))",
+            }}
+          >
+            <Gift className="w-7 h-7 lg:w-8 lg:h-8 text-white" strokeWidth={1.8} />
+          </div>
+        </div>
+
+        {/* Invite link + copy */}
+        <div className="mt-5 pt-5 border-t border-white/[0.06]">
+          <p className="text-[12px] font-semibold text-white/70 mb-2">
+            Your Invite Link
+          </p>
+          <div className="flex items-stretch gap-2">
+            <div className="flex-1 min-w-0 flex items-center px-3.5 py-2.5 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
+              <span
+                className="block w-full truncate text-[13px] font-medium text-white/60"
+                title={referralLink}
+              >
+                {referralLink}
+              </span>
+            </div>
+            <motion.button
+              whileTap={{ scale: 0.96 }}
+              onClick={handleCopyLink}
+              disabled={!hasCode}
+              aria-label={copiedLink ? "Copied" : "Copy invite link"}
+              className="shrink-0 flex items-center justify-center gap-1.5 px-4 py-3 rounded-2xl bg-white/10 border border-white/15 text-white hover:bg-white/[0.14] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-4 h-4" strokeWidth={2.6} />
+                  <span className="hidden sm:inline text-[13px] font-bold">
+                    Copied
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" strokeWidth={2.2} />
+                  <span className="hidden sm:inline text-[13px] font-bold">
+                    Copy Link
+                  </span>
+                </>
+              )}
+            </motion.button>
+          </div>
+        </div>
+
+        {/* Share via */}
+        <div className="mt-5">
+          <p className={`${SECTION_LABEL} mb-2.5`}>Share Via</p>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {SHARE_PLATFORMS.map((p) => (
+              <motion.button
+                key={p.key}
+                whileTap={{ scale: 0.94 }}
+                onClick={() => handleShareClick(p)}
+                disabled={!hasCode}
+                className="min-w-0 flex flex-col items-center gap-1.5 py-3 px-1 rounded-2xl bg-white/[0.02] border border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.03] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/10 flex items-center justify-center text-white/80">
+                  <p.Icon className="w-4 h-4" />
+                </span>
+                <span className="text-[10px] font-semibold text-white/55 text-center leading-tight truncate w-full px-0.5">
+                  {p.label}
+                </span>
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      </motion.section>
+
+      {/* Transient copy/share feedback — fixed so it clears the scroll clip */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            key={toast}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="pointer-events-none fixed left-1/2 top-4 z-50 -translate-x-1/2"
+          >
+            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#161616]/95 border border-white/10 backdrop-blur shadow-xl">
+              <Check className="w-3.5 h-3.5 text-white" strokeWidth={2.4} />
+              <span className="text-[12px] font-semibold text-white">{toast}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────
 
 export default function MerchantRewardsPage() {
@@ -400,6 +697,9 @@ export default function MerchantRewardsPage() {
               </div>
             </div>
           </motion.section>
+
+          {/* ── Refer & Earn (real referral code + invite link) ── */}
+          <ReferAndEarnCard />
 
           {/* ── Getting started (one-off tasks) ── */}
           <section className="mt-8">
