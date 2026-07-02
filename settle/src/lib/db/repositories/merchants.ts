@@ -304,6 +304,7 @@ export function serializeMerchant(merchant: {
   buy_rate?: number | null;
   sell_rate?: number | null;
   dashboard_layout?: unknown | null;
+  created_at?: string | Date | null;
 }): Record<string, unknown> {
   const dto: Record<string, unknown> = {
     id: merchant.id,
@@ -346,6 +347,13 @@ export function serializeMerchant(merchant: {
   // shape mismatch (forward-compat when new widgets ship).
   if (merchant.dashboard_layout !== undefined) {
     dto.dashboard_layout = merchant.dashboard_layout;
+  }
+  // Account "Joined" date. getMerchantByIdSafe projects created_at but the
+  // serializer previously dropped it, so the Settings > Account "Joined" field
+  // rendered "—". Emit it as an ISO string (matches the other date fields).
+  if (merchant.created_at !== undefined) {
+    const v = merchant.created_at;
+    dto.created_at = v == null ? null : v instanceof Date ? v.toISOString() : String(v);
   }
   return dto;
 }
