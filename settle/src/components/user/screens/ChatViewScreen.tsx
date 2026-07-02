@@ -1119,6 +1119,7 @@ export const ChatViewScreen = ({
                       {msg.timestamp.toLocaleTimeString("en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        hour12: false,
                       })}
                     </p>
                   </div>
@@ -1137,6 +1138,7 @@ export const ChatViewScreen = ({
                       {msg.timestamp.toLocaleTimeString("en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        hour12: false,
                       })}
                     </p>
                   </div>
@@ -1228,6 +1230,7 @@ export const ChatViewScreen = ({
                       {msg.timestamp.toLocaleTimeString("en-US", {
                         hour: "2-digit",
                         minute: "2-digit",
+                        hour12: false,
                       })}
                     </span>
                     {isMe &&

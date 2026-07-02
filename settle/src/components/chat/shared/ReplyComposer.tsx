@@ -21,10 +21,10 @@ export function ReplyComposer({ draft, onCancel, className }: ReplyComposerProps
       className={`flex items-center gap-2 rounded-lg border-l-2 border-indigo-400 bg-white/[0.04] px-3 py-2 ${className ?? ''}`}
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium text-indigo-300">
+        <div className="truncate text-xs font-medium text-text-primary">
           Replying to {draft.isMe ? 'yourself' : draft.senderName || 'Unknown'}
         </div>
-        <ReplyPreview reference={draft} />
+        <ReplyPreview reference={draft} className="text-text-secondary" />
       </div>
       <button
         type="button"

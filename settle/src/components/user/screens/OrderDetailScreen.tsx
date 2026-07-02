@@ -4540,33 +4540,41 @@ export const OrderDetailScreen = ({
                                     {msg.text}
                                   </span>
                                 )}
-                                {/* Timestamp + delivery status ticks */}
+                                {/* Timestamp + delivery status ticks. The own
+                                    bubble's background flips per theme (white in
+                                    dark / navy in light — see the .bg-white.text-black
+                                    remap in user-theme.css), so the meta colour is
+                                    driven by the theme-aware `chat-own-meta` class
+                                    instead of a hardcoded text-black/* utility that
+                                    turned invisible on the navy light-theme bubble.
+                                    Ticks inherit that colour via currentColor. */}
                                 <div
                                   className={`flex items-center gap-1 mt-1 ${
-                                    msg.from === "me" ? "justify-end" : ""
+                                    msg.from === "me"
+                                      ? "justify-end chat-own-meta"
+                                      : ""
                                   }`}
                                 >
                                   <span
                                     className={`text-[10px] ${
-                                      msg.from === "me"
-                                        ? "text-black/50"
-                                        : "text-text-tertiary"
+                                      msg.from === "me" ? "" : "text-text-tertiary"
                                     }`}
                                   >
                                     {msg.timestamp.toLocaleTimeString("en-US", {
                                       hour: "2-digit",
                                       minute: "2-digit",
+                                      hour12: false,
                                     })}
                                   </span>
                                   {msg.from === "me" &&
                                     (msg.status === "sending" ? (
-                                      <Clock className="w-3 h-3 text-text-tertiary" />
+                                      <Clock className="w-3 h-3 opacity-70" />
                                     ) : msg.status === "read" || msg.isRead ? (
                                       <CheckCheck className="w-3.5 h-3.5 text-info" />
                                     ) : msg.status === "delivered" ? (
-                                      <CheckCheck className="w-3.5 h-3.5 text-black/40" />
+                                      <CheckCheck className="w-3.5 h-3.5 opacity-70" />
                                     ) : (
-                                      <Check className="w-3 h-3 text-surface-base/60" />
+                                      <Check className="w-3 h-3 opacity-70" />
                                     ))}
                                 </div>
                               </div>
