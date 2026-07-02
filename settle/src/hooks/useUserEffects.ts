@@ -5,6 +5,7 @@ import type { Screen, Order, OrderStatus, DbOrder } from "@/components/user/scre
 import { mapDbStatusToUI, mapDbOrderToUI } from "@/components/user/screens/helpers";
 import { usePusher } from "@/context/PusherContext";
 import { useRealtimeChat } from "@/hooks/useRealtimeChat";
+import type { ReplyReferenceData } from "@/components/chat/shared";
 import { useRealtimeOrder } from "@/hooks/useRealtimeOrder";
 import { fetchWithAuth } from '@/lib/api/fetchWithAuth';
 import { orderActionKey } from '@/lib/api/idempotencyKeys';
@@ -770,9 +771,10 @@ export function useUserEffects({
     );
   }, [showChat, screen, activeOrder?.id, activeChat?.messages?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSendMessage = useCallback(() => {
+  const handleSendMessage = useCallback((replyTo?: ReplyReferenceData | null) => {
     if (!activeChat || !chatMessage.trim()) return;
-    sendChatMessage(activeChat.id, chatMessage);
+    // Migration 177: forward the optional reply target as the 5th arg.
+    sendChatMessage(activeChat.id, chatMessage, undefined, undefined, replyTo ?? null);
     // Update lastMessage on the order for chat list preview
     if (activeOrderId) {
       setOrders(prev => prev.map(o => {
