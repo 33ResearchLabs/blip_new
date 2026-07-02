@@ -918,6 +918,70 @@ export function ChatRoom({
     };
   }, [pendingFile]);
 
+  // Pasted / dropped documents (pdf, sheets, docs…) ride the SAME signed
+  // Cloudinary raw-upload + fileData send path the paperclip uses. Kept separate
+  // from startImageUpload (which targets the image endpoint + optimistic bubble).
+  const startFileUpload = useCallback(
+    async (file: File, caption: string) => {
+      setIsUploading(true);
+      setUploadProgress(0);
+      try {
+        const sigRes = await fetchWithAuth("/api/upload/signature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId }),
+        });
+        if (!sigRes.ok) return;
+        const sigData = await sigRes.json();
+        if (!sigData.success) return;
+        const sig = sigData.data;
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("signature", sig.signature);
+        formData.append("timestamp", sig.timestamp.toString());
+        formData.append("api_key", sig.apiKey);
+        formData.append("folder", sig.folder);
+
+        const fileUrl: string | null = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable)
+              setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          });
+          xhr.addEventListener("load", () => {
+            if (xhr.status >= 200 && xhr.status < 300)
+              resolve(JSON.parse(xhr.responseText).secure_url);
+            else reject(new Error(`Upload failed: ${xhr.status}`));
+          });
+          xhr.addEventListener("error", () =>
+            reject(new Error("Network error")),
+          );
+          xhr.open(
+            "POST",
+            `https://api.cloudinary.com/v1_1/${sig.cloudName}/raw/upload`,
+          );
+          xhr.send(formData);
+        });
+
+        if (fileUrl) {
+          onSendMessage(caption.trim() || file.name, undefined, {
+            fileUrl,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          });
+        }
+      } catch (err) {
+        console.error("[ChatRoom] File upload error:", err);
+      } finally {
+        setIsUploading(false);
+        setUploadProgress(0);
+      }
+    },
+    [orderId, onSendMessage],
+  );
+
   // ─── Reply (Migration 177) ─────────────────────────────────────────────
   const [replyDraft, setReplyDraft] = useState<ReplyDraft | null>(null);
 
@@ -926,7 +990,8 @@ export function ChatRoom({
   const paste = usePasteAttachments({
     attachments: pasteAtts,
     onAttachmentsChange: setPasteAtts,
-    acceptedTypes: ["image/*"],
+    // Any file type — images ride the image pipeline, everything else (pdf,
+    // sheets, docs…) rides the raw-upload file pipeline. Bounded by size + count.
     maxFiles: 5,
     maxFileSize: 10 * 1024 * 1024,
   });
@@ -979,14 +1044,31 @@ export function ChatRoom({
     // cleanup doesn't blank the optimistic upload bubble).
     if (pasteAtts.length > 0) {
       const caption = messageText.trim();
-      pasteAtts.forEach((att, i) => {
+      const imageAtts = pasteAtts.filter((a) => a.type === "image");
+      const fileAtts = pasteAtts.filter((a) => a.type !== "image");
+      // The caption rides the FIRST outgoing message (prefer an image if any).
+      const captionOwner = imageAtts.length > 0 ? "image" : "file";
+      // Images → existing optimistic Cloudinary image pipeline.
+      imageAtts.forEach((att, i) => {
         startImageUpload(
           att.file,
           URL.createObjectURL(att.file),
-          i === 0 ? caption : "",
+          i === 0 && captionOwner === "image" ? caption : "",
           `temp-paste-${att.id}`,
         );
       });
+      // Documents (pdf / sheets / docs…) → raw-upload file pipeline. Sequential
+      // so the single upload spinner (isUploading/uploadProgress) isn't clobbered.
+      if (fileAtts.length > 0) {
+        void (async () => {
+          for (let i = 0; i < fileAtts.length; i++) {
+            await startFileUpload(
+              fileAtts[i].file,
+              i === 0 && captionOwner === "file" ? caption : "",
+            );
+          }
+        })();
+      }
       setPasteAtts([]);
       setMessageText("");
       setReplyDraft(null);
@@ -1072,7 +1154,7 @@ export function ChatRoom({
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-lg border-2 border-dashed border-indigo-400/70 bg-black/50 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-2 text-indigo-200">
             <ImageIcon className="h-8 w-8" />
-            <span className="text-sm font-medium">Drop image to attach</span>
+            <span className="text-sm font-medium">Drop file to attach</span>
           </div>
         </div>
       )}

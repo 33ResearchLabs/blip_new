@@ -5,6 +5,7 @@
 // their existing message rendering (zero regression by construction).
 
 export { ReplyReference } from './ReplyReference';
+export { FileMessageBubble, type FileMessageBubbleProps } from './FileMessageBubble';
 export { ReplyComposer } from './ReplyComposer';
 export { ReplyPreview } from './ReplyPreview';
 export { SwipeToReply } from './SwipeToReply';
