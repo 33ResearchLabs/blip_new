@@ -14,18 +14,13 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, ChevronLeft, Loader2, Copy, Check } from "lucide-react";
+import { ChevronDown, ChevronLeft, Copy, Check } from "lucide-react";
 import { formatCrypto, formatRate } from "@/lib/format";
 import { paymentMethodLabel } from "./helpers";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
 type Tone = "accent" | "success" | "error" | "warning";
-
-// Pre-escrow only: cancel is a unilateral, instant back-out while nothing is
-// locked. Once escrow is locked there is no cancel button here — the exit is
-// Appeal, and mutual cancellation is resolved through that flow.
-const CANCELLABLE = new Set(["pending", "accepted", "escrow_pending"]);
 
 const STATUS_LABELS: Record<string, string> = {
   // 'open' is the minimal-status form of a pending/unmatched order — without it
@@ -117,7 +112,10 @@ export interface OrderOverviewScreenProps {
       only when `paymentLocked` is true. */
   paymentRows?: { label: string; value: string; mono?: boolean }[];
   onClose: () => void;
-  onCancel: () => void;
+  /** @deprecated Cancel was removed from this screen — it always renders Back.
+   *  Kept optional so existing callers keep compiling; no longer used. */
+  onCancel?: () => void;
+  /** @deprecated No longer used (Cancel removed). */
   isCancelling?: boolean;
 }
 
@@ -136,12 +134,9 @@ export function OrderOverviewScreen({
   paymentLocked,
   paymentRows,
   onClose,
-  onCancel,
-  isCancelling,
 }: OrderOverviewScreenProps) {
   const s = (status || "").toLowerCase();
   const meta = statusMeta(s);
-  const canCancel = CANCELLABLE.has(s);
   const sym = fiatSymbol(fiatCode);
 
   // Tap-to-copy for the Order ID.
@@ -273,26 +268,15 @@ export function OrderOverviewScreen({
           </ul>
         </div>
 
-        {/* Cancel */}
-        {canCancel ? (
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={onCancel}
-            disabled={isCancelling}
-            className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isCancelling && <Loader2 className="w-4 h-4 animate-spin" />}
-            Cancel Order
-          </motion.button>
-        ) : (
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            onClick={onClose}
-            className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent"
-          >
-            Back
-          </motion.button>
-        )}
+        {/* Cancel was removed from this screen — the exit here is always Back.
+            Cancellation is handled via Appeal / mutual-cancel elsewhere. */}
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onClose}
+          className="w-full py-3.5 rounded-2xl text-[16px] font-semibold bg-accent text-accent-text border border-transparent"
+        >
+          Back
+        </motion.button>
       </div>
     </div>
   );
