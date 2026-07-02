@@ -1781,7 +1781,7 @@ export default function MerchantSettingsPage({
                   <p className="text-[13px] text-white font-medium truncate max-w-[40ch]">
                     {merchant?.created_at
                       ? new Date(merchant.created_at).toLocaleDateString(
-                          undefined,
+                          "en-US",
                           { month: "short", day: "numeric", year: "numeric" },
                         )
                       : "—"}
