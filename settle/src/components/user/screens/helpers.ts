@@ -1,5 +1,44 @@
 import type { OrderStatus, OrderStep, TradeType, DbOrder, Order, Merchant } from './types';
 
+// Human label for an order's payment-method code ('bank' | 'upi' | 'cash').
+// Single source of truth so the METHOD tile, Order Overview, Payment Details,
+// and every other screen show the SAME label for a given order. Never collapse
+// an unknown/`upi` value to "Bank Transfer" — that was the source of the
+// UPI-shown-as-Bank-Transfer inconsistency.
+export function paymentMethodLabel(method?: string | null): string {
+  switch ((method || '').toLowerCase()) {
+    case 'cash': return 'Cash';
+    case 'upi': return 'UPI';
+    case 'bank': return 'Bank Transfer';
+    // Unknown but present code → surface it verbatim (uppercased) rather than
+    // silently mislabelling it. Empty/missing → the safe electronic default.
+    default: return method ? method.toUpperCase() : 'Bank Transfer';
+  }
+}
+
+// The payment-method code to display for an order, resolved from the concrete
+// method locked into the order (merchantPaymentMethod → lockedPaymentMethod)
+// and only falling back to the order's coarse `merchant.paymentMethod` when
+// nothing is locked yet. A BUY order is stored coarsely as 'bank' even when the
+// counterparties settle over UPI — so the coarse field alone mislabels the
+// completed order as "Bank Transfer". Mirror this logic anywhere the locked
+// account details are shown so the label never disagrees with them.
+export function resolveOrderPaymentMethod(order: Order): string {
+  const mpm = order.merchantPaymentMethod;
+  const lpm = order.lockedPaymentMethod;
+  if (mpm) {
+    const t = (mpm.type || '').toLowerCase();
+    if (t === 'upi' || (typeof mpm.details === 'string' && mpm.details.includes('@'))) return 'upi';
+    if (t) return t;
+  } else if (lpm) {
+    const d = lpm.details || {};
+    if ((lpm.type || '').toLowerCase() === 'upi' || d.upi_id) return 'upi';
+    if (d.bank_name || d.iban) return 'bank';
+    if (lpm.type) return lpm.type.toLowerCase();
+  }
+  return order.merchant?.paymentMethod ?? 'bank';
+}
+
 // Map DB status to UI status/step
 // For SELL orders, pass the order type and merchant_id to determine the correct step:
 //   - SELL + escrowed + no merchant_id → step 1 (waiting for merchant to claim)

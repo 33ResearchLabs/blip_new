@@ -37,6 +37,7 @@ import {
 import type { Order } from "./types";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { formatCrypto, formatCount } from "@/lib/format";
+import { paymentMethodLabel, resolveOrderPaymentMethod } from "./helpers";
 import { getAppealIssuesForStage, getAppealIssue } from "@/lib/appeals/issues";
 
 const CARD = "bg-surface-card border border-border-subtle";
@@ -179,7 +180,7 @@ export function AppealScreen({
           <div className="grid grid-cols-3 gap-3">
             <OverviewCell label="You pay" value={fiatStr} />
             <OverviewCell label="You will receive" value={cryptoStr} />
-            <OverviewCell label="Payment method" value={order.merchant.paymentMethod === "cash" ? "Cash" : "Bank Transfer"} />
+            <OverviewCell label="Payment method" value={paymentMethodLabel(resolveOrderPaymentMethod(order))} />
           </div>
         </div>
 

@@ -3,6 +3,11 @@ export type Screen = "home" | "order" | "escrow" | "orders" | "profile" | "chats
 export type TradeType = "buy" | "sell";
 export type TradePreference = "fast" | "cheap" | "best";
 export type PaymentMethod = "bank" | "cash";
+// An order's persisted payment-method code. Superset of the coarse form-level
+// PaymentMethod: a sell order created via the UPI scan-to-pay flow is stored as
+// 'upi' (see useUserTradeCreation). Order-level fields use this wider type so
+// 'upi' is never silently narrowed to 'bank' for display.
+export type OrderPaymentMethod = PaymentMethod | "upi";
 export type OrderStep = 1 | 2 | 3 | 4;
 export type OrderStatus = "pending" | "payment" | "waiting" | "complete" | "disputed" | "cancelled" | "expired";
 
@@ -50,7 +55,7 @@ export interface DbOrder {
   merchant_id: string;
   offer_id: string;
   type: "buy" | "sell";
-  payment_method: PaymentMethod;
+  payment_method: OrderPaymentMethod;
   crypto_amount: number;
   crypto_currency: string;
   fiat_amount: number;
@@ -127,7 +132,7 @@ export interface Order {
     rating: number;
     trades: number;
     rate: number;
-    paymentMethod: PaymentMethod;
+    paymentMethod: OrderPaymentMethod;
     bank?: string;
     iban?: string;
     accountName?: string;
