@@ -692,7 +692,10 @@ export async function setBuyOrderMerchantPaymentMethod(
  *   - the caller is the order's seller (merchant_id — always the seller for
  *     BUY U2M and M2M),
  *   - the order is in a pre-release state (accepted/escrowed),
- *   - the chosen method belongs to that merchant and is active.
+ *   - the chosen method belongs to that merchant, is active, and its type is
+ *     one the buyer offered (buyer_payment_types) — matching the buyer-pick
+ *     path (setBuyOrderMerchantPaymentMethod). Null/empty types (sell / legacy)
+ *     impose no type restriction.
  * Best-effort from the lock flow: callers proceed with the lock even if this
  * returns ok:false (the accept-time default-attach remains the fallback).
  */
@@ -703,7 +706,7 @@ export async function setSellerReceivingMethod(
 ): Promise<{ ok: boolean; reason?: string }> {
   const result = await transaction(async (client) => {
     const { rows } = await client.query(
-      `SELECT id, merchant_id, status FROM orders WHERE id = $1 FOR UPDATE`,
+      `SELECT id, merchant_id, status, buyer_payment_types FROM orders WHERE id = $1 FOR UPDATE`,
       [orderId],
     );
     const order = rows[0];
@@ -712,10 +715,14 @@ export async function setSellerReceivingMethod(
     if (!['accepted', 'escrowed'].includes(order.status)) {
       return { ok: false, reason: 'bad_status' };
     }
+    // The chosen account must be a TYPE the buyer offered (buyer_payment_types),
+    // so the buyer is never told to pay into a rail they didn't select. A
+    // null/empty array (sell / legacy orders) imposes no type restriction.
     const { rows: methodRows } = await client.query(
       `SELECT id FROM merchant_payment_methods
-        WHERE id = $1 AND merchant_id = $2 AND is_active = true`,
-      [methodId, merchantId],
+        WHERE id = $1 AND merchant_id = $2 AND is_active = true
+          AND ($3::text[] IS NULL OR array_length($3::text[], 1) IS NULL OR type = ANY($3::text[]))`,
+      [methodId, merchantId, order.buyer_payment_types ?? null],
     );
     if (methodRows.length === 0) return { ok: false, reason: 'invalid_method' };
 
