@@ -374,11 +374,26 @@ export const orderRoutes: FastifyPluginAsync = async (fastify) => {
         if (actor_type === 'merchant' && actor_id && !order.merchant_payment_method_id) {
           (async () => {
             try {
+              // Attach a method whose TYPE is one the buyer chose to pay with
+              // (orders.buyer_payment_types). Previously this grabbed the
+              // merchant's global default regardless of type, so a buyer who
+              // chose "bank" was shown the merchant's default UPI account. When
+              // the order carries no buyer_payment_types (sell / legacy orders),
+              // fall back to the merchant's default exactly as before.
               const mpm = await queryOne<{ id: string }>(
-                `SELECT id FROM merchant_payment_methods
-                 WHERE merchant_id = $1 AND is_active = true
-                 ORDER BY is_default DESC, created_at DESC LIMIT 1`,
-                [actor_id]
+                `SELECT mpm.id
+                   FROM merchant_payment_methods mpm
+                   CROSS JOIN (SELECT buyer_payment_types FROM orders WHERE id = $2) o
+                  WHERE mpm.merchant_id = $1
+                    AND mpm.is_active = true
+                    AND (
+                      o.buyer_payment_types IS NULL
+                      OR array_length(o.buyer_payment_types, 1) IS NULL
+                      OR mpm.type = ANY(o.buyer_payment_types)
+                    )
+                  ORDER BY mpm.is_default DESC, mpm.created_at DESC
+                  LIMIT 1`,
+                [actor_id, id]
               );
               if (mpm) {
                 await dbQuery(
