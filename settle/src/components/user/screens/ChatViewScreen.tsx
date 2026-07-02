@@ -36,6 +36,7 @@ import {
   ReplyReference,
   ReplyComposer,
   SwipeToReply,
+  FileMessageBubble,
   useJumpToMessage,
   ImageViewerProvider,
   type ReplyReferenceData,
@@ -69,6 +70,12 @@ export interface ChatViewScreenProps {
       messageType?: string;
       receiptData?: Record<string, unknown> | null;
       imageUrl?: string | null;
+      // File messages (pdf / sheets / docs…). Already carried by the realtime
+      // hook's ChatMessage; declared here so ChatViewScreen can render them.
+      fileUrl?: string | null;
+      fileName?: string | null;
+      fileSize?: number | null;
+      mimeType?: string | null;
       isRead?: boolean;
       status?: "sending" | "sent" | "delivered" | "read" | "failed";
       // Migration 177: reply reference (populated by the realtime hook).
@@ -631,6 +638,75 @@ export const ChatViewScreen = ({
     [activeChat, activeOrder?.id, sendChatMessage],
   );
 
+  // Pasted / dropped documents (pdf, sheets, docs…) ride a signed Cloudinary
+  // raw-upload, then send as a fileData (file) message. ChatViewScreen previously
+  // had NO non-image upload path; this mirrors the merchant ChatRoom flow. The
+  // send button's isUploading spinner reflects progress (no optimistic bubble).
+  const startFileUpload = useCallback(
+    async (file: File, caption: string) => {
+      if (!activeChat) return;
+      setIsUploading(true);
+      try {
+        const sigRes = await fetchWithAuth("/api/upload/signature", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: activeOrder.id }),
+        });
+        if (!sigRes.ok) return;
+        const sigData = await sigRes.json();
+        if (!sigData.success) return;
+        const sig = sigData.data;
+        if (
+          !sig.signature ||
+          !sig.timestamp ||
+          !sig.apiKey ||
+          !sig.cloudName ||
+          !sig.folder
+        ) {
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("signature", sig.signature);
+        formData.append("timestamp", sig.timestamp.toString());
+        formData.append("api_key", sig.apiKey);
+        formData.append("folder", sig.folder);
+
+        const fileUrl: string | null = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.addEventListener("load", () => {
+            if (xhr.status >= 200 && xhr.status < 300)
+              resolve(JSON.parse(xhr.responseText).secure_url);
+            else reject(new Error(`Upload failed: ${xhr.status}`));
+          });
+          xhr.addEventListener("error", () =>
+            reject(new Error("Network error")),
+          );
+          xhr.open(
+            "POST",
+            `https://api.cloudinary.com/v1_1/${sig.cloudName}/raw/upload`,
+          );
+          xhr.send(formData);
+        });
+
+        if (fileUrl) {
+          sendChatMessage(activeChat.id, caption.trim() || file.name, undefined, {
+            fileUrl,
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type,
+          });
+        }
+      } catch (err) {
+        console.error("[ChatViewScreen] File upload error:", err);
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [activeChat, activeOrder?.id, sendChatMessage],
+  );
+
   /** Called from ImagePreviewModal when user clicks Send */
   const handleImageSend = useCallback(
     (caption: string) => {
@@ -672,7 +748,8 @@ export const ChatViewScreen = ({
   const paste = usePasteAttachments({
     attachments: pasteAtts,
     onAttachmentsChange: setPasteAtts,
-    acceptedTypes: ["image/*"],
+    // Any file type — images ride the image pipeline, everything else (pdf,
+    // sheets, docs…) rides the raw-upload file pipeline. Bounded by size + count.
     maxFiles: 5,
     maxFileSize: 10 * 1024 * 1024,
   });
@@ -684,11 +761,28 @@ export const ChatViewScreen = ({
   const canReplyNow = !!chatEnabled;
 
   const buildReplyDraft = (
-    msg: { id: string; text: string; senderName?: string; messageType?: string; imageUrl?: string | null },
+    msg: {
+      id: string;
+      text: string;
+      senderName?: string;
+      messageType?: string;
+      imageUrl?: string | null;
+      fileName?: string | null;
+    },
     mine: boolean,
   ): ReplyDraft => {
-    const kind = msg.messageType === "image" || msg.imageUrl ? "image" : "text";
-    const preview = kind === "image" ? "Photo" : (msg.text || "").slice(0, 140);
+    const kind =
+      msg.messageType === "image" || msg.imageUrl
+        ? "image"
+        : msg.messageType === "file"
+          ? "file"
+          : "text";
+    const preview =
+      kind === "image"
+        ? "Photo"
+        : kind === "file"
+          ? msg.fileName || "File"
+          : (msg.text || "").slice(0, 140);
     return {
       id: msg.id,
       // senderType is not rendered in the reference; the server rebuilds the
@@ -720,14 +814,31 @@ export const ChatViewScreen = ({
     if (pasteAtts.length > 0) {
       const caption = chatMessage.trim();
       stopTyping();
-      pasteAtts.forEach((att, i) => {
+      const imageAtts = pasteAtts.filter((a) => a.type === "image");
+      const fileAtts = pasteAtts.filter((a) => a.type !== "image");
+      // The caption rides the FIRST outgoing message (prefer an image if any).
+      const captionOwner = imageAtts.length > 0 ? "image" : "file";
+      // Images → existing optimistic Cloudinary image pipeline.
+      imageAtts.forEach((att, i) => {
         startImageUpload(
           att.file,
           URL.createObjectURL(att.file),
-          i === 0 ? caption : "",
+          i === 0 && captionOwner === "image" ? caption : "",
           `temp-paste-${att.id}`,
         );
       });
+      // Documents (pdf / sheets / docs…) → raw-upload file pipeline. Sequential
+      // so the single upload spinner (isUploading) isn't clobbered.
+      if (fileAtts.length > 0) {
+        void (async () => {
+          for (let i = 0; i < fileAtts.length; i++) {
+            await startFileUpload(
+              fileAtts[i].file,
+              i === 0 && captionOwner === "file" ? caption : "",
+            );
+          }
+        })();
+      }
       setPasteAtts([]);
       setChatMessage("");
       setReplyDraft(null);
@@ -910,7 +1021,7 @@ export const ChatViewScreen = ({
           <div className="pointer-events-none sticky inset-x-0 top-0 z-30 flex h-full items-center justify-center rounded-lg border-2 border-dashed border-accent/70 bg-black/40 backdrop-blur-sm">
             <div className="flex flex-col items-center gap-2 text-accent">
               <Paperclip className="h-8 w-8" />
-              <span className="text-sm font-medium">Drop image to attach</span>
+              <span className="text-sm font-medium">Drop file to attach</span>
             </div>
           </div>
         )}
@@ -1035,6 +1146,8 @@ export const ChatViewScreen = ({
 
             const isMe = msg.from === "me";
             const isImageMsg = msg.messageType === "image" && msg.imageUrl;
+            const isFileMsg =
+              msg.messageType === "file" && (!!msg.fileUrl || !!msg.fileName);
 
             return (
               <div
@@ -1077,6 +1190,20 @@ export const ChatViewScreen = ({
                       uploadStatus="sent"
                       isOwn={isMe}
                     />
+                  ) : isFileMsg ? (
+                    <>
+                      <FileMessageBubble
+                        fileName={msg.fileName}
+                        fileSize={msg.fileSize}
+                        fileUrl={msg.fileUrl}
+                        mimeType={msg.mimeType}
+                      />
+                      {msg.text && msg.text !== msg.fileName && (
+                        <p className="mt-1.5 text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word">
+                          {msg.text}
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-[15px] leading-relaxed whitespace-pre-wrap wrap-break-word">
                       {msg.text}
