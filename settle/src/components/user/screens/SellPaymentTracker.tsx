@@ -49,6 +49,7 @@ import type { Order } from "./types";
 import { formatCrypto } from "@/lib/format";
 import { explorerUrl } from "@/lib/solana/networkLabel";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
+import { paymentMethodLabel } from "./helpers";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -117,7 +118,7 @@ export function SellPaymentTracker({
   const cryptoStr = formatCrypto(parseFloat(order.cryptoAmount));
   const fiatStr = `${sym}${formatCrypto(parseFloat(order.fiatAmount))}`;
   const fiatCode = (order.fiatCode || "").toUpperCase();
-  const methodLabel = order.merchant?.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
+  const methodLabel = paymentMethodLabel(order.merchant?.paymentMethod);
   const txHref = order.escrowTxHash ? explorerUrl("tx", order.escrowTxHash) : null;
 
   const merchantName = order.merchant?.name || "Merchant";
@@ -199,13 +200,13 @@ export function SellPaymentTracker({
             animate={{ y: 0, opacity: 1 }}
             className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
           >
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 relative ${banner.bg}`}>
+            <div className={`w-8 h-8 rounded-2xl flex items-center justify-center shrink-0 relative ${banner.bg}`}>
               <motion.div
                 className={`absolute inset-0 rounded-2xl border-2 ${banner.fg} opacity-30`}
                 animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0, 0.5] }}
                 transition={{ duration: 2, repeat: Infinity }}
               />
-              <banner.icon className={`w-6 h-6 ${banner.fg}`} />
+              <banner.icon className={`w-4 h-4 ${banner.fg}`} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">{banner.title}</p>
@@ -236,8 +237,8 @@ export function SellPaymentTracker({
             transition={{ delay: 0.03 }}
             className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
           >
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
-              <ShieldCheck className="w-6 h-6 text-text-secondary" />
+            <div className="w-8 h-8 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
+              <ShieldCheck className="w-4 h-4 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">Escrow locked</p>
@@ -258,8 +259,8 @@ export function SellPaymentTracker({
             transition={{ delay: 0.05 }}
             className={`rounded-2xl p-4 flex items-center gap-3 ${CARD}`}
           >
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
-              <ShieldCheck className="w-6 h-6 text-text-secondary" />
+            <div className="w-8 h-8 rounded-2xl flex items-center justify-center shrink-0 bg-border-subtle">
+              <ShieldCheck className="w-4 h-4 text-text-secondary" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[15px] font-semibold text-text-primary">Escrow details</p>
@@ -435,7 +436,7 @@ export function SellPaymentTracker({
               fiatAmount={parseFloat(order.fiatAmount)}
               rate={Number(order.merchant?.rate)}
               fiatCode={order.fiatCode}
-              paymentMethod={order.merchant?.paymentMethod === "cash" ? "cash" : "bank"}
+              paymentMethod={order.merchant?.paymentMethod ?? "bank"}
               createdAt={order.createdAt ? new Date(order.createdAt) : new Date()}
               onClose={() => setShowOverview(false)}
               onCancel={onRaiseAppeal}

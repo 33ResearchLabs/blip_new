@@ -10,6 +10,7 @@ import { formatCrypto } from '@/lib/format';
 import { getDisplayOrderId } from '@/lib/displayOrderId';
 import { OrderOverviewScreen } from './OrderOverviewScreen';
 import { WaitingTracker, type TrackerBanner } from './WaitingTracker';
+import { paymentMethodLabel } from './helpers';
 import { useCancelOrderSheet } from '@/hooks/useCancelOrderSheet';
 
 // Total matching window (mirrors the 15-min default expiry on order creation).
@@ -79,7 +80,7 @@ export const MatchingScreen = ({
   const methodLabel =
     payTypes.length > 0
       ? payTypes.map((t) => (t === "cash" ? "Cash" : t === "upi" ? "UPI" : "Bank")).join(" · ")
-      : pendingTradeData.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
+      : paymentMethodLabel(pendingTradeData.paymentMethod);
 
   // The CANCEL itself. Unchanged backend contract (CANCEL action + per-order
   // Idempotency-Key). Throws on failure so CancelOrderSheet keeps itself open
@@ -214,6 +215,7 @@ export const MatchingScreen = ({
         }}
         activeStepIndex={1}
         createdTime={createdTime}
+        defaultTimelineOpen={false}
         progressSubtitle="Matching merchant · In progress"
         tiles={tiles}
         onOpenOverview={() => setShowOverview(true)}

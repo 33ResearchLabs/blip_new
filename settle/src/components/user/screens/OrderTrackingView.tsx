@@ -29,6 +29,7 @@ import type { Order } from "./types";
 import { formatCrypto } from "@/lib/format";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
 import { WaitingTracker, TIMELINE, type TrackerBanner, type Tone } from "./WaitingTracker";
+import { paymentMethodLabel } from "./helpers";
 
 const TERMINAL = new Set(["cancelled", "expired", "disputed"]);
 // Pre-escrow states: nothing is locked, so the user can cancel unilaterally
@@ -174,7 +175,7 @@ export function OrderTrackingView({
   const methodLabel =
     buyerPayTypes.length > 0
       ? buyerPayTypes.map((t) => (t === "cash" ? "Cash" : t === "upi" ? "UPI" : "Bank")).join(" · ")
-      : order.merchant?.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
+      : paymentMethodLabel(order.merchant?.paymentMethod);
   // Cancel is offered while funds are NOT locked (pre-escrow), OR for an
   // UNMATCHED sell offer whose escrow is locked but no merchant has claimed it
   // yet (the seller is alone, so they can withdraw + self-refund). A matched,
@@ -279,7 +280,7 @@ export function OrderTrackingView({
               fiatAmount={parseFloat(order.fiatAmount)}
               rate={Number(order.merchant?.rate)}
               fiatCode={order.fiatCode}
-              paymentMethod={order.merchant?.paymentMethod === "cash" ? "cash" : "bank"}
+              paymentMethod={order.merchant?.paymentMethod ?? "bank"}
               paymentMethods={buyerPayTypes}
               createdAt={order.createdAt ? new Date(order.createdAt) : new Date()}
               onClose={() => setShowOverview(false)}

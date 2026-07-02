@@ -59,6 +59,7 @@ import { fetchWithAuth } from "@/lib/api/fetchWithAuth";
 import dynamic from "next/dynamic";
 import { showAlert } from "@/context/ModalContext";
 import { formatCrypto, formatFiat, formatRate } from "@/lib/format";
+import { resolveOrderPaymentMethod } from "./helpers";
 import { useGlobalNow } from "@/hooks/useGlobalNow";
 import { useCancelOrderSheet } from "@/hooks/useCancelOrderSheet";
 import { OrderProgressStepper } from "@/components/user/OrderProgressStepper";
@@ -86,8 +87,30 @@ function deriveOverviewPaymentRows(
     const isUpi =
       (mpm.type || "").toLowerCase() === "upi" ||
       (typeof mpm.details === "string" && mpm.details.includes("@"));
-    rows.push({ label: isUpi ? "UPI Name" : "Account Name", value: mpm.name || "—" });
-    rows.push({ label: isUpi ? "UPI ID" : "Account No. / IBAN", value: mpm.details || "—", mono: true });
+    if (isUpi) {
+      // UPI: name = payee name; details = "vpa (provider)". The provider is
+      // already covered by the UPI Name row, so strip the trailing "(…)" and
+      // show only the VPA in the UPI ID row.
+      const upiId = (mpm.details || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+      rows.push({ label: "UPI Name", value: mpm.name || "—" });
+      rows.push({ label: "UPI ID", value: upiId || "—", mono: true });
+    } else {
+      // Bank: name = bank name; details = "{accountName} - {accountNumber} (IBAN)"
+      // (same composition the merchant PaymentMethodModal parses back). Split it
+      // so each field gets its own row — the account-number row must NOT carry
+      // the holder name or IBAN.
+      const details = mpm.details || "";
+      const ibanMatch = details.match(/\(([^)]+)\)\s*$/);
+      const iban = ibanMatch ? ibanMatch[1].trim() : "";
+      const withoutIban = details.replace(/\s*\([^)]+\)\s*$/, "");
+      const dashIdx = withoutIban.lastIndexOf(" - ");
+      const accountName = dashIdx >= 0 ? withoutIban.slice(0, dashIdx).trim() : withoutIban.trim();
+      const accountNumber = dashIdx >= 0 ? withoutIban.slice(dashIdx + 3).trim() : "";
+      if (mpm.name) rows.push({ label: "Bank Name", value: mpm.name });
+      if (accountName) rows.push({ label: "Account Name", value: accountName });
+      if (accountNumber) rows.push({ label: "Account No.", value: accountNumber, mono: true });
+      if (iban) rows.push({ label: "IBAN", value: iban, mono: true });
+    }
   } else if (lpm) {
     const d = lpm.details || {};
     if (d.bank_name) rows.push({ label: "Bank Name", value: d.bank_name });
@@ -1157,7 +1180,13 @@ export const OrderDetailScreen = ({
             />
             <SummaryFact
               label="Method"
-              value={activeOrder.merchant.paymentMethod === "cash" ? "Cash" : "Bank"}
+              value={(() => {
+                // Resolve from the locked method (buy orders are stored coarsely
+                // as 'bank' even when settled over UPI). Short "Bank" label keeps
+                // this compact summary grid from wrapping.
+                const m = resolveOrderPaymentMethod(activeOrder);
+                return m === "cash" ? "Cash" : m === "upi" ? "UPI" : "Bank";
+              })()}
             />
             {activeOrder.merchant.name && (
               <SummaryFact
@@ -3433,7 +3462,7 @@ export const OrderDetailScreen = ({
               fiatAmount={parseFloat(activeOrder.fiatAmount)}
               rate={Number(activeOrder.merchant?.rate)}
               fiatCode={activeOrder.fiatCode}
-              paymentMethod={activeOrder.merchant?.paymentMethod === "cash" ? "cash" : "bank"}
+              paymentMethod={resolveOrderPaymentMethod(activeOrder)}
               createdAt={activeOrder.createdAt ? new Date(activeOrder.createdAt) : new Date()}
               paymentLocked={["escrowed", "payment_pending", "payment_sent", "completed"].includes(
                 String(activeOrder.dbStatus || activeOrder.status || "").toLowerCase(),

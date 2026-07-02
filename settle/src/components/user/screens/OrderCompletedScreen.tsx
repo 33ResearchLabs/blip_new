@@ -26,6 +26,7 @@ import {
 import type { Order } from "./types";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { formatCrypto, formatRate, formatCount } from "@/lib/format";
+import { paymentMethodLabel, resolveOrderPaymentMethod } from "./helpers";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -141,7 +142,7 @@ export function OrderCompletedScreen({
             <Row label="You Paid" value={fiatStr} />
             <Row label="You Received" value={`${cryptoStr} USDT`} />
             <Row label="Rate" value={`${sym}${formatRate(order.merchant.rate)}`} />
-            <Row label="Payment Method" value={order.merchant.paymentMethod === "cash" ? "Cash" : "Bank Transfer"} />
+            <Row label="Payment Method" value={paymentMethodLabel(resolveOrderPaymentMethod(order))} />
             <Row label="Completed" value={completedStr} />
           </div>
         </div>

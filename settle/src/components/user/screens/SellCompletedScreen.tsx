@@ -33,6 +33,7 @@ import type { Order } from "./types";
 import { formatCrypto } from "@/lib/format";
 import { networkLabel } from "@/lib/solana/networkLabel";
 import { OrderOverviewScreen } from "./OrderOverviewScreen";
+import { paymentMethodLabel } from "./helpers";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -65,7 +66,7 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
   const cryptoStr = formatCrypto(parseFloat(order.cryptoAmount));
   const fiatStr = `${sym}${formatCrypto(parseFloat(order.fiatAmount))}`;
   const fiatCode = (order.fiatCode || "").toUpperCase();
-  const methodLabel = order.merchant?.paymentMethod === "cash" ? "Cash" : "Bank Transfer";
+  const methodLabel = paymentMethodLabel(order.merchant?.paymentMethod);
   const completedStr = order.completedAt ? fmtDateTime(order.completedAt) : "—";
 
   const routeNodes = [
@@ -266,7 +267,7 @@ export function SellCompletedScreen({ order, displayId, onBack, onHelp }: SellCo
               fiatAmount={parseFloat(order.fiatAmount)}
               rate={Number(order.merchant?.rate)}
               fiatCode={order.fiatCode}
-              paymentMethod={order.merchant?.paymentMethod === "cash" ? "cash" : "bank"}
+              paymentMethod={order.merchant?.paymentMethod ?? "bank"}
               createdAt={order.createdAt ? new Date(order.createdAt) : new Date()}
               onClose={() => setShowOverview(false)}
               onCancel={onHelp}

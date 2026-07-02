@@ -16,6 +16,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, ChevronLeft, Loader2, Copy, Check } from "lucide-react";
 import { formatCrypto, formatRate } from "@/lib/format";
+import { paymentMethodLabel } from "./helpers";
 
 const CARD = "bg-surface-card border border-border-subtle";
 
@@ -81,16 +82,6 @@ function fiatSymbol(code: string | undefined | null): string {
   }
 }
 
-// Human label for a buyer payment-type code ('bank' | 'upi' | 'cash').
-function payTypeLabel(t: string): string {
-  switch ((t || "").toLowerCase()) {
-    case "bank": return "Bank Transfer";
-    case "upi": return "UPI";
-    case "cash": return "Cash";
-    default: return t ? t.toUpperCase() : "";
-  }
-}
-
 function fmtCreatedAt(d: Date): string {
   const day = String(d.getDate()).padStart(2, "0");
   const mon = d.toLocaleString("en-US", { month: "short" });
@@ -107,7 +98,11 @@ export interface OrderOverviewScreenProps {
   fiatAmount: number;
   rate: number;
   fiatCode: string;
-  paymentMethod: "bank" | "cash";
+  /** The order's own payment-method code as stored on the order
+   *  ('bank' | 'upi' | 'cash'). Passed through verbatim from the order data —
+   *  never collapse 'upi' to 'bank' upstream, or Payment Details will disagree
+   *  with the METHOD tile on the tracker. */
+  paymentMethod: string;
   /** BUY (Way-1): the buyer's chosen payment-method types ('bank' | 'upi' |
       'cash'). When present, the Payment Method row lists all of them instead of
       the single coarse `paymentMethod`. */
@@ -232,8 +227,8 @@ export function OrderOverviewScreen({
             label={paymentMethods && paymentMethods.length > 1 ? "Payment Methods" : "Payment Method"}
             value={
               paymentMethods && paymentMethods.length > 0
-                ? paymentMethods.map(payTypeLabel).filter(Boolean).join(", ")
-                : paymentMethod === "cash" ? "Cash" : "Bank Transfer"
+                ? paymentMethods.map(paymentMethodLabel).filter(Boolean).join(", ")
+                : paymentMethodLabel(paymentMethod)
             }
           />
           {paymentLocked && paymentRows && paymentRows.length > 0 ? (

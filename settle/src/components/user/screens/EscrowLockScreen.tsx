@@ -251,7 +251,7 @@ export const EscrowLockScreen = ({
                 fiatAmount={parseFloat(fiatAmount || "0")}
                 rate={currentRate}
                 fiatCode={fiatCurrency}
-                paymentMethod={selectedPaymentMethod?.type === "cash" ? "cash" : "bank"}
+                paymentMethod={selectedPaymentMethod?.type ?? "bank"}
                 createdAt={createdAtDate}
                 onClose={() => setShowOverview(false)}
                 onCancel={() => {
